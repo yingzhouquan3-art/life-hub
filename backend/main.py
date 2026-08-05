@@ -35,6 +35,7 @@ from backend.api import quick as quick_api
 from backend.api import recovery as recovery_api
 from backend.api import reflection as reflection_api
 from backend.api import rhythm as rhythm_api
+from backend.api import statements as statements_api
 from backend.api import study as study_api
 from backend.api import views as views_api
 from backend.core import registry
@@ -90,6 +91,7 @@ app.include_router(goals_api.router)
 app.include_router(views_api.router)
 app.include_router(capture_api.router)
 app.include_router(quick_api.router)
+app.include_router(statements_api.router)
 
 
 # ---------- Static ----------
