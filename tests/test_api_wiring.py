@@ -13,6 +13,7 @@ from backend.api import (
     ledger,
     nutrition,
     platform,
+    quick,
     recovery,
     reflection,
     rhythm,
@@ -23,6 +24,7 @@ from backend.api import (
 ROUTERS = {
     "platform": platform.router,
     "capture": capture.router,
+    "quick": quick.router,
     "ledger": ledger.router,
     "fitness": fitness.router,
     "nutrition": nutrition.router,

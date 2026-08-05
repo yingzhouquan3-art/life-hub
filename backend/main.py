@@ -31,6 +31,7 @@ from backend.api import goals as goals_api
 from backend.api import ledger as ledger_api
 from backend.api import nutrition as nutrition_api
 from backend.api import platform as platform_api
+from backend.api import quick as quick_api
 from backend.api import recovery as recovery_api
 from backend.api import reflection as reflection_api
 from backend.api import rhythm as rhythm_api
@@ -68,6 +69,7 @@ app.include_router(reflection_api.router)
 app.include_router(goals_api.router)
 app.include_router(views_api.router)
 app.include_router(capture_api.router)
+app.include_router(quick_api.router)
 
 
 # ---------- Static ----------
