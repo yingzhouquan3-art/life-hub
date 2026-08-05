@@ -20,9 +20,9 @@
 """
 from __future__ import annotations
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from backend.api import capture as capture_api
@@ -38,6 +38,7 @@ from backend.api import rhythm as rhythm_api
 from backend.api import study as study_api
 from backend.api import views as views_api
 from backend.core import registry
+from backend.core.access import TOKEN_HEADER, access_allowed
 from backend.core.config import FRONTEND
 from backend.core.db import db
 from backend.modules import MODULES
@@ -57,6 +58,25 @@ app = FastAPI(title="我的生活中枢", docs_url="/api/docs")
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
+
+
+@app.middleware("http")
+async def guard_remote_access(request: Request, call_next):
+    """本机照旧放行；其他来源访问 /api/* 必须带 token。
+
+    静态外壳不设门禁：它不含数据，而且 Service Worker 与 manifest
+    的请求带不上自定义头。
+    """
+    if not access_allowed(
+        request.client.host if request.client else None,
+        request.url.path,
+        request.headers.get(TOKEN_HEADER) or request.query_params.get("token"),
+    ):
+        return JSONResponse(
+            status_code=401,
+            content={"detail": "需要访问令牌。手机端请用启动器给出的带 token 的地址配对。"},
+        )
+    return await call_next(request)
 
 app.include_router(platform_api.router)
 app.include_router(ledger_api.router)

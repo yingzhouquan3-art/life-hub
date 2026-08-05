@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>手机配对 · 我的生活中枢</title>
+<style>
+  :root { --bg:#12141a; --card:#1b1e26; --line:#2a2e3a; --text:#e8eaf0; --muted:#8f96a8; --accent:#f0b429; --warn:#fb923c; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.6 system-ui,"PingFang SC","Microsoft YaHei",sans-serif;
+         display:flex; justify-content:center; padding:40px 20px; }
+  .wrap { width:100%; max-width:640px; }
+  h1 { font-size:22px; margin:0 0 4px; }
+  .sub { color:var(--muted); margin-bottom:24px; font-size:14px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:18px; margin-bottom:14px; }
+  .card h2 { margin:0 0 10px; font-size:13px; color:var(--muted); letter-spacing:.08em; font-weight:600; }
+  code { display:block; background:#0f1117; border:1px solid var(--line); border-radius:9px;
+         padding:12px; font:13px/1.5 ui-monospace,Consolas,monospace; word-break:break-all; color:var(--accent); }
+  button { margin-top:10px; padding:10px 16px; border:0; border-radius:9px; background:var(--accent);
+           color:#1a1205; font:600 14px/1 inherit; cursor:pointer; }
+  button.ghost { background:transparent; color:var(--muted); border:1px solid var(--line); }
+  ol { padding-left:20px; color:var(--muted); font-size:14px; }
+  ol b { color:var(--text); }
+  .warn { color:var(--warn); font-size:14px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>手机配对</h1>
+  <div class="sub">数据仍然只在这台电脑上。手机通过你自己的私有网络连进来，不经过任何第三方服务器。</div>
+
+  <div class="card">
+    <h2>手机端地址</h2>
+    <div id="mobile"></div>
+  </div>
+
+  <div class="card">
+    <h2>访问令牌</h2>
+    <code id="token">读取中…</code>
+    <button id="copyToken" class="ghost">复制令牌</button>
+    <button id="resetToken" class="ghost">换一个令牌</button>
+    <div class="sub" style="margin:10px 0 0">
+      换令牌后，已经配对的手机会立刻失效，需要重新用新地址打开一次。
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>怎么用</h2>
+    <ol>
+      <li>手机和这台电脑都装上 <b>Tailscale</b> 并登录同一个账号。</li>
+      <li>把上面那条<b>带 token 的地址</b>发到手机上（微信发给自己最快），点开。</li>
+      <li>页面会把令牌存进手机，之后地址栏里的 token 会自动抹掉。</li>
+      <li>在手机浏览器里选「添加到主屏幕」，就有一个独立的随手记图标了。</li>
+    </ol>
+  </div>
+</div>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+let pairing = null;
+
+async function load() {
+  try {
+    const port = location.port || '8766';
+    pairing = await fetch(`/api/access/pairing?port=${port}`).then((r) => {
+      if (!r.ok) throw new Error('无法读取配对信息，请确认这个页面是在本机浏览器里打开的');
+      return r.json();
+    });
+    $('token').textContent = pairing.token;
+    if (pairing.mobile_url) {
+      const full = `${pairing.mobile_url}?token=${encodeURIComponent(pairing.token)}`;
+      $('mobile').innerHTML = `<code id="url">${full}</code>
+        <button id="copyUrl">复制地址</button>`;
+      $('copyUrl').onclick = () => copy(full, $('copyUrl'));
+    } else {
+      $('mobile').innerHTML = `<div class="warn">
+        没有检测到 Tailscale 地址。手机现在连不进来——这不是程序出错，
+        是这台电脑还没加入你的 Tailscale 网络。装好并登录后刷新本页即可。</div>`;
+    }
+  } catch (error) {
+    $('mobile').innerHTML = `<div class="warn">${error.message}</div>`;
+    $('token').textContent = '—';
+  }
+}
+
+function copy(text, button) {
+  navigator.clipboard.writeText(text).then(() => {
+    const original = button.textContent;
+    button.textContent = '已复制';
+    setTimeout(() => { button.textContent = original; }, 1500);
+  });
+}
+
+$('copyToken').onclick = () => pairing && copy(pairing.token, $('copyToken'));
+$('resetToken').onclick = async () => {
+  if (!confirm('换新令牌后，已配对的手机会立刻失效，需要重新配对。确定吗？')) return;
+  await fetch('/api/access/reset-token', { method: 'POST' });
+  load();
+};
+load();
+</script>
+</body>
+</html>

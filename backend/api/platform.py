@@ -9,10 +9,11 @@ import sqlite3
 from datetime import date, datetime
 from typing import Any, Literal
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from backend.backup import build_snapshot
+from backend.core.access import describe_access, is_loopback, reset_token
 from backend.core.config import SNAPSHOT_VERSION
 from backend.core.db import current_path as current_db_path
 from backend.core.db import db
@@ -38,6 +39,30 @@ from backend.modules.study import get_study_state
 from backend.views.overview import get_life_overview
 
 router = APIRouter()
+
+
+def _require_loopback(request: Request) -> None:
+    """配对信息里含 token，只能在本机浏览器里看。"""
+    if not is_loopback(request.client.host if request.client else None):
+        raise HTTPException(403, "配对信息只能在本机查看")
+
+
+@router.get("/api/access/pairing")
+def access_pairing(request: Request, port: int = 8766):
+    """手机配对信息：Tailscale 地址、手机端网址和访问令牌。
+
+    没装 Tailscale 或没连上时 tailscale_ip 为 None，这时手机连不进来，
+    不是程序出错。
+    """
+    _require_loopback(request)
+    return describe_access(port)
+
+
+@router.post("/api/access/reset-token")
+def access_reset_token(request: Request):
+    """换一个访问令牌。手机丢了或令牌泄漏时用，旧令牌立即失效。"""
+    _require_loopback(request)
+    return {"token": reset_token()}
 
 
 class SettingsIn(BaseModel):
