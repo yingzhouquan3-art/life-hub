@@ -1,0 +1,964 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#0a0a0f">
+  <title>我的生活中枢</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='6' fill='%23ffd166'/%3E%3Ccircle cx='16' cy='16' r='10' fill='none' stroke='%23ffd166' stroke-opacity='.35' stroke-width='1.4'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./style.css?v=20260805-life-platform-7-1">
+</head>
+<body>
+
+  <!-- 背景星空层 -->
+  <canvas id="starfield" aria-hidden="true"></canvas>
+
+  <nav class="platform-rail" aria-label="生活平台模块">
+    <button class="platform-rail__brand" data-module-target="overview" aria-label="我的生活中枢" title="我的生活中枢">
+      <span>生</span>
+    </button>
+    <div class="platform-rail__items">
+      <button class="platform-nav is-active" data-module-target="overview" aria-current="page"><span class="platform-nav__icon">⌂</span><span>总览</span></button>
+      <button class="platform-nav" data-module-target="calendar"><span class="platform-nav__icon">历</span><span>日历</span></button>
+      <button class="platform-nav" data-module-target="goals"><span class="platform-nav__icon">标</span><span>目标</span></button>
+      <button class="platform-nav" data-module-target="finance"><span class="platform-nav__icon">¥</span><span>账本</span></button>
+      <button class="platform-nav" data-module-target="fitness"><span class="platform-nav__icon">动</span><span>健身</span></button>
+      <button class="platform-nav" data-module-target="nutrition"><span class="platform-nav__icon">食</span><span>饮食</span></button>
+      <button class="platform-nav" data-module-target="recovery"><span class="platform-nav__icon">眠</span><span>恢复</span></button>
+      <button class="platform-nav" data-module-target="study"><span class="platform-nav__icon">学</span><span>学习</span></button>
+      <button class="platform-nav" data-module-target="rhythm"><span class="platform-nav__icon">律</span><span>节奏</span></button>
+      <button class="platform-nav" data-module-target="reflection"><span class="platform-nav__icon">记</span><span>复盘</span></button>
+    </div>
+    <span class="platform-rail__version">MY LIFE</span>
+  </nav>
+
+  <button class="global-search-trigger" id="btn-life-search" aria-keyshortcuts="Control+K" title="搜索全部生活记录（Ctrl+K）"><span>⌕</span><strong>搜索</strong><kbd>Ctrl K</kbd></button>
+
+  <main class="life-module life-overview" data-module-panel="overview">
+    <header class="life-module__head">
+      <div><span class="life-module__eyebrow">MY LIFE · TODAY</span><h1>我的生活中枢</h1><p id="life-date">把零散的生活，收进一个属于自己的地方。</p></div>
+      <button class="module-jump" data-module-jump="calendar">打开生活日历 <span>→</span></button>
+    </header>
+    <section class="life-hero">
+      <div><span>今天</span><h2 id="life-headline">正在读取你的生活状态…</h2><p>不追求完美数据，只留下真实轨迹。</p></div>
+      <div class="life-orbit" aria-hidden="true"><span id="life-completed">0</span><small>/ 6</small></div>
+    </section>
+    <section class="life-summary-grid">
+      <article class="life-summary-card life-summary-card--finance" data-module-jump="finance">
+        <header><span>个人账本</span><b>¥</b></header><strong id="life-balance">¥0</strong><p id="life-finance-note">今天尚未记录支出</p><small>查看资金与预算 →</small>
+      </article>
+      <article class="life-summary-card life-summary-card--fitness" data-module-jump="fitness">
+        <header><span>健身</span><b>动</b></header><strong><span id="life-fitness-minutes">0</span> 分钟</strong><p id="life-fitness-note">本周 0 次运动</p><small>记录身体活动 →</small>
+      </article>
+      <article class="life-summary-card life-summary-card--nutrition" data-module-jump="nutrition">
+        <header><span>饮食</span><b>食</b></header><strong><span id="life-meal-count">0</span> 次</strong><p id="life-nutrition-note">今天尚未记录饮食</p><small>记下今天吃了什么 →</small>
+      </article>
+      <article class="life-summary-card life-summary-card--recovery" data-module-jump="recovery">
+        <header><span>恢复</span><b>眠</b></header><strong id="life-sleep-hours">—</strong><p id="life-recovery-note">今天尚未记录状态</p><small>记录睡眠与精力 →</small>
+      </article>
+      <article class="life-summary-card life-summary-card--study" data-module-jump="study">
+        <header><span>学习</span><b>学</b></header><strong><span id="life-study-minutes">0</span> 分钟</strong><p id="life-study-note">今天尚未记录学习</p><small>记录一段专注 →</small>
+      </article>
+      <article class="life-summary-card life-summary-card--rhythm" data-module-jump="rhythm">
+        <header><span>个人节奏</span><b>律</b></header><strong id="life-rhythm-progress">0 / 0</strong><p id="life-rhythm-note">还没有待办或习惯</p><small>安排今天的节奏 →</small>
+      </article>
+    </section>
+    <section class="life-actions-panel">
+      <header><div><span>下一步</span><h2>今天值得做的小事</h2></div><small>系统只根据记录缺口提示，不做医疗判断</small></header>
+      <div class="life-actions" id="life-actions"></div>
+    </section>
+  </main>
+
+  <main class="life-module life-calendar-module" data-module-panel="calendar" hidden>
+    <header class="life-module__head">
+      <div><span class="life-module__eyebrow">LIFE · CALENDAR</span><h1>生活日历</h1><p>把分散在各模块里的记录和安排，放回它们发生的日期。</p></div>
+      <button class="module-jump" data-module-jump="overview">返回生活总览 <span>→</span></button>
+    </header>
+    <section class="tracker-kpis life-calendar-kpis">
+      <article><span>有轨迹的日期</span><strong id="life-calendar-active-days">0 天</strong><small>记录或安排至少存在一项</small></article>
+      <article><span>生活事实</span><strong id="life-calendar-fact-count">0 条</strong><small>已经发生并保存的记录</small></article>
+      <article><span>生活安排</span><strong id="life-calendar-arrangement-count">0 项</strong><small>待办或固定账单日期</small></article>
+    </section>
+    <div class="life-calendar-layout">
+      <section class="life-calendar-board">
+        <header class="life-calendar-board__head">
+          <div><span>月度视图</span><h2 id="life-calendar-month-label">本月</h2></div>
+          <div class="life-calendar-controls">
+            <button id="life-calendar-prev" aria-label="上个月">←</button>
+            <button id="life-calendar-today">回到今天</button>
+            <button id="life-calendar-next" aria-label="下个月">→</button>
+          </div>
+        </header>
+        <div class="life-calendar-weekdays" aria-hidden="true"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+        <div class="life-calendar-grid" id="life-calendar-grid"></div>
+        <div class="life-calendar-legend"><span><i class="is-fact"></i> 已发生记录</span><span><i class="is-arrangement"></i> 安排与待办</span><small>空白日期只表示没有记录，不代表什么也没发生。</small></div>
+      </section>
+      <section class="life-calendar-day-panel">
+        <header><span>日期详情</span><h2 id="life-calendar-selected-date">今天</h2><small id="life-calendar-day-summary">0 条事实 · 0 项安排</small></header>
+        <div class="life-calendar-section">
+          <div class="life-calendar-section__title"><strong>已经发生</strong><span>生活事实</span></div>
+          <div class="life-calendar-items" id="life-calendar-facts"></div>
+        </div>
+        <div class="life-calendar-section">
+          <div class="life-calendar-section__title"><strong>日期上的安排</strong><span>不等于已经完成</span></div>
+          <div class="life-calendar-items" id="life-calendar-arrangements"></div>
+        </div>
+        <p class="tracker-status" id="life-calendar-status" hidden></p>
+      </section>
+    </div>
+  </main>
+
+  <main class="life-module goals-module" data-module-panel="goals" hidden>
+    <header class="life-module__head">
+      <div><span class="life-module__eyebrow">LIFE · DIRECTION</span><h1>个人目标</h1><p>记录想靠近的方向，用可完成的里程碑看见阶段进展。</p></div>
+      <button class="module-jump" data-module-jump="calendar">在生活日历中查看日期 <span>→</span></button>
+    </header>
+    <section class="tracker-kpis goals-kpis">
+      <article><span>进行中的目标</span><strong id="goals-active-count">0 个</strong><small>只统计你主动保持进行中的目标</small></article>
+      <article><span>已完成目标</span><strong id="goals-completed-count">0 个</strong><small>完成状态由你主动确认</small></article>
+      <article><span>里程碑进展</span><strong id="goals-milestone-progress">0 / 0</strong><small>只是完成记录，不是表现评分</small></article>
+    </section>
+    <div class="goals-layout">
+      <section class="tracker-form-card goals-create-card">
+        <header><span>建立方向</span><h2>新增生活目标</h2><small>带金额的储蓄目标请继续使用个人账本。</small></header>
+        <div class="goals-create-form">
+          <label><span>目标名称</span><input id="goal-title" type="text" maxlength="100" placeholder="例如：完成本学期课程项目"></label>
+          <label><span>所属方向</span><select id="goal-category"><option value="personal">个人</option><option value="study">学习</option><option value="health">身体</option><option value="finance">财务能力</option><option value="other">其他</option></select></label>
+          <label><span>希望靠近的日期（可选）</span><input id="goal-target-date" type="date"></label>
+          <label><span>为什么想做这件事（可选）</span><textarea id="goal-motivation" maxlength="500" rows="5" placeholder="写给未来的自己，不需要像任务说明。"></textarea></label>
+          <button id="btn-add-life-goal">保存生活目标</button>
+          <p class="tracker-status" id="goals-status" hidden></p>
+        </div>
+      </section>
+      <section class="goals-list-card">
+        <header><div><span>我的方向</span><h2>目标与里程碑</h2></div><small>暂停不是失败，只是暂时不推进</small></header>
+        <div class="goals-list" id="goals-list"></div>
+      </section>
+    </div>
+  </main>
+
+  <main class="layout" data-module-panel="finance" hidden>
+
+    <!-- 左 1/3 账本面板 -->
+    <aside class="ledger" aria-label="账本面板">
+      <header class="brand">
+        <span class="brand__mark" aria-hidden="true">
+          <svg viewBox="0 0 24 24" width="22" height="22"><circle cx="12" cy="12" r="4.5" fill="#ffd166"/><circle cx="12" cy="12" r="8" fill="none" stroke="#ffd166" stroke-opacity=".35" stroke-width="1.2"/></svg>
+        </span>
+        <div>
+          <h1 class="brand__title">个人账本</h1>
+          <p class="brand__sub">生活中枢 · 财务模块</p>
+        </div>
+        <button class="icon-btn" id="btn-settings" title="设置" aria-label="设置">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.87l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1.03 1.56V21a2 2 0 1 1-4 0v-.08a1.7 1.7 0 0 0-1.11-1.56 1.7 1.7 0 0 0-1.87.34l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.7 1.7 0 0 0 4.6 15a1.7 1.7 0 0 0-1.56-1.03H3a2 2 0 1 1 0-4h.08A1.7 1.7 0 0 0 4.6 9 1.7 1.7 0 0 0 4.26 7.13L4.2 7.07A2 2 0 1 1 7.03 4.24l.06.06A1.7 1.7 0 0 0 9 4.6 1.7 1.7 0 0 0 10.03 3.04V3a2 2 0 1 1 4 0v.08A1.7 1.7 0 0 0 15 4.6a1.7 1.7 0 0 0 1.87-.34l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.7 1.7 0 0 0 19.4 9c.05.39.27.74.6.96.32.22.7.32 1.07.29H21a2 2 0 1 1 0 4h-.08a1.7 1.7 0 0 0-1.52 1.03z"/></svg>
+        </button>
+      </header>
+
+      <!-- 大学生个人版：生活续航 + 自主能力 -->
+      <section class="progress-card">
+        <header class="progress-card__head">
+          <span class="progress-card__title">我的生活续航</span>
+          <span class="progress-card__pct"><span id="ring-pct">0.0</span><span class="progress-card__pct-sym">%</span></span>
+        </header>
+
+        <div class="progress-card__hero">
+          <span class="progress-card__big" id="lit-count">0</span>
+          <span class="progress-card__big-unit">天</span>
+        </div>
+        <div class="progress-card__hero-sub">
+          当前资金可支撑 · 未来还有 <em id="remaining-days">0</em> 天等待创造
+        </div>
+
+        <div class="dual-bar" aria-hidden="true">
+          <span class="dual-bar__asset"  id="bar-asset"></span>
+          <span class="dual-bar__income" id="bar-income"></span>
+        </div>
+
+        <div class="breakdown">
+          <div class="breakdown__row breakdown__row--asset" id="row-asset" hidden>
+            <span class="breakdown__icon breakdown__icon--asset"></span>
+            <span class="breakdown__label">支持资金留存</span>
+            <span class="breakdown__value" id="asset-days">0</span>
+            <span class="breakdown__unit">天</span>
+            <span class="breakdown__hint"><em id="asset-amount">¥0</em></span>
+          </div>
+          <div class="breakdown__row breakdown__row--income">
+            <span class="breakdown__icon breakdown__icon--income"></span>
+            <span class="breakdown__label">自主所得留存</span>
+            <span class="breakdown__value" id="income-days">0</span>
+            <span class="breakdown__unit">天</span>
+            <span class="breakdown__hint"><em id="net-saving">¥0</em></span>
+          </div>
+        </div>
+
+        <div class="autonomy-strip">
+          <div>
+            <span class="autonomy-strip__label">自主生活覆盖率</span>
+            <span class="autonomy-strip__hint">自主收入 ÷ 已记录支出</span>
+          </div>
+          <strong id="autonomy-rate">—</strong>
+          <span id="autonomy-days">0 天</span>
+        </div>
+      </section>
+
+      <!-- 添加交易 -->
+      <section class="tx-form">
+        <div class="seg" role="tablist" aria-label="交易类型">
+          <button class="seg__btn is-active" data-type="income" role="tab" aria-selected="true">
+            <span class="seg__dot seg__dot--income"></span>收入
+          </button>
+          <button class="seg__btn" data-type="expense" role="tab" aria-selected="false">
+            <span class="seg__dot seg__dot--expense"></span>支出
+          </button>
+        </div>
+        <label class="field field--amount">
+          <span class="field__label">金额</span>
+          <div class="field__row">
+            <span class="field__prefix">¥</span>
+            <input id="tx-amount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0.00" autocomplete="off">
+          </div>
+        </label>
+        <label class="field" id="income-source-field">
+          <span class="field__label">这笔收入来自哪里</span>
+          <select id="tx-source">
+            <option value="family_support">家庭生活费</option>
+            <option value="scholarship">奖学金 / 助学金</option>
+            <option value="part_time">兼职 / 实习</option>
+            <option value="project">个人项目 / 创作</option>
+            <option value="investment">投资所得</option>
+            <option value="other">其他自主收入</option>
+          </select>
+        </label>
+        <div class="field-grid">
+          <label class="field">
+            <span class="field__label">记入账户</span>
+            <select id="tx-account" aria-label="记入账户"></select>
+          </label>
+          <label class="field" id="expense-category-field" hidden>
+            <span class="field__label">支出分类</span>
+            <select id="tx-category">
+              <option value="food">餐饮</option>
+              <option value="transport">交通</option>
+              <option value="study">学习</option>
+              <option value="housing">住宿</option>
+              <option value="medical">医疗</option>
+              <option value="entertainment">娱乐</option>
+              <option value="social">社交</option>
+              <option value="digital">数字服务</option>
+              <option value="other">其他</option>
+            </select>
+          </label>
+        </div>
+        <div class="field-grid">
+          <div class="field">
+            <span class="field__label">日期</span>
+            <div class="date-input" data-picker>
+              <input type="hidden" id="tx-date">
+              <button type="button" class="date-input__trigger" aria-haspopup="dialog">
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                <span class="date-input__value">选择日期</span>
+              </button>
+              <div class="date-popover" hidden role="dialog" aria-label="日期选择">
+                <header class="date-popover__head">
+                  <button type="button" class="date-popover__nav" data-nav="prev" aria-label="上一月">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                  </button>
+                  <span class="date-popover__title"></span>
+                  <button type="button" class="date-popover__nav" data-nav="next" aria-label="下一月">
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                  </button>
+                </header>
+                <div class="date-popover__weekdays"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
+                <div class="date-popover__grid"></div>
+                <footer class="date-popover__foot">
+                  <button type="button" class="date-popover__btn" data-action="today">今天</button>
+                  <button type="button" class="date-popover__btn" data-action="clear">清除</button>
+                </footer>
+              </div>
+            </div>
+          </div>
+          <label class="field">
+            <span class="field__label">备注</span>
+            <input id="tx-note" type="text" maxlength="40" placeholder="选填">
+          </label>
+        </div>
+        <button class="btn btn--primary" id="btn-submit">
+          <span class="btn__shimmer" aria-hidden="true"></span>
+          <span class="btn__text">记入生活支持</span>
+        </button>
+      </section>
+
+      <!-- 统计仪表盘 -->
+      <section class="stats">
+        <div class="stat"><div class="stat__label">家庭支持</div><div class="stat__value stat__value--support" id="st-family">¥0</div></div>
+        <div class="stat"><div class="stat__label">自主收入</div><div class="stat__value stat__value--income" id="st-independent">¥0</div></div>
+        <div class="stat"><div class="stat__label">总支出</div><div class="stat__value stat__value--expense" id="st-expense">¥0</div></div>
+        <div class="stat"><div class="stat__label">日均花销</div><div class="stat__value" id="st-avg">¥0</div></div>
+      </section>
+
+      <!-- 最近交易 -->
+      <section class="tx-list" aria-label="最近交易">
+        <div class="tx-list__head">
+          <h2>最近交易</h2>
+          <span class="tx-list__count" id="tx-count">0</span>
+        </div>
+        <ul class="tx-list__items" id="tx-items" role="list"></ul>
+        <div class="tx-list__empty" id="tx-empty">
+          <p>尚未记录任何交易</p>
+          <p class="tx-list__hint">记录支持，也记录你亲手创造的收入</p>
+        </div>
+      </section>
+
+    </aside>
+
+    <!-- 右 2/3 一体化平台主视图 -->
+    <section class="stage" aria-label="个人资金平台">
+      <div class="stage__chrome is-wide-tabs" id="stage-chrome">
+        <div class="stage__title">
+          <span class="stage__title-cn" id="stage-title-cn">今天</span>
+          <span class="stage__title-en" id="stage-title-en">— Daily Brief</span>
+        </div>
+        <div class="view-tabs" role="tablist" aria-label="平台视图">
+          <button class="view-tab is-active" data-view="today" role="tab" aria-selected="true">今天</button>
+          <button class="view-tab" data-view="grid" role="tab" aria-selected="false">人生方格</button>
+          <button class="view-tab" data-view="dashboard" role="tab" aria-selected="false">资金驾驶舱</button>
+          <button class="view-tab" data-view="planning" role="tab" aria-selected="false">规划中心</button>
+          <button class="view-tab" data-view="review" role="tab" aria-selected="false">月度日历</button>
+          <button class="view-tab" data-view="data" role="tab" aria-selected="false">数据中心</button>
+        </div>
+        <div class="stage__legend" id="stage-legend" hidden>
+          <span class="legend-item"><i class="legend-swatch legend-swatch--asset"></i>家庭支持 / 起始存款</span>
+          <span class="legend-item"><i class="legend-swatch legend-swatch--lit"></i>自主所得</span>
+          <span class="legend-item"><i class="legend-swatch legend-swatch--unlit"></i>未点亮</span>
+          <span class="legend-item" id="legend-overflow" hidden><i class="legend-swatch legend-swatch--over"></i>超额</span>
+        </div>
+      </div>
+      <div class="today-view stage-view" data-stage-view="today">
+        <section class="today-hero" id="today-hero">
+          <div><span>今天的财务状态</span><h2 id="today-headline">正在读取真实账本…</h2></div>
+          <time id="today-date"></time>
+        </section>
+        <section class="today-kpis" aria-label="今日概览">
+          <article><span>今天建议还能花</span><strong id="today-available">—</strong><small id="today-budget-basis">等待预算依据</small></article>
+          <article><span>今天已经花费</span><strong id="today-spent">¥0</strong><small>只统计真实支出</small></article>
+          <article><span>本月预算剩余</span><strong id="today-month-remaining">—</strong><small id="today-month-status">尚未设置月预算</small></article>
+          <article><span>下次生活费</span><strong id="today-next-allowance">—</strong><small id="today-next-balance">等待生活费周期</small></article>
+        </section>
+        <div class="today-grid">
+          <section class="dashboard-panel quick-entry-panel">
+            <header><div><h2>一句话记账</h2><p>先解析预览，只有确认后才写入账本</p></div></header>
+            <div class="quick-entry-box">
+              <input id="quick-entry-input" type="text" maxlength="120" placeholder="例如：午饭 16.5 支付宝">
+              <button id="btn-quick-parse">解析</button>
+            </div>
+            <p class="plan-status plan-status--error" id="quick-entry-status" hidden></p>
+            <div class="quick-preview" id="quick-preview" hidden>
+              <div class="quick-preview__head"><strong>确认前预览</strong><span id="quick-confidence"></span></div>
+              <div class="quick-preview__grid">
+                <label><span>类型</span><select id="quick-type"><option value="expense">支出</option><option value="income">收入</option></select></label>
+                <label><span>金额</span><input id="quick-amount" type="number" min="0" step="0.01"></label>
+                <label><span>账户</span><select id="quick-account"></select></label>
+                <label id="quick-category-field"><span>分类</span><select id="quick-category"><option value="food">餐饮</option><option value="transport">交通</option><option value="study">学习</option><option value="housing">居住</option><option value="medical">医疗</option><option value="entertainment">娱乐</option><option value="social">社交</option><option value="digital">数字服务</option><option value="other">其他</option></select></label>
+                <label id="quick-source-field" hidden><span>来源</span><select id="quick-source"><option value="family_support">家庭生活费</option><option value="scholarship">奖学金 / 助学金</option><option value="part_time">兼职 / 实习</option><option value="project">个人项目 / 创作</option><option value="investment">投资所得</option><option value="other">其他自主收入</option></select></label>
+                <label><span>日期</span><input id="quick-date" type="date"></label>
+              </div>
+              <label class="quick-note"><span>备注</span><input id="quick-note" type="text" maxlength="120"></label>
+              <div class="quick-warnings" id="quick-warnings"></div>
+              <div class="quick-preview__actions"><button id="btn-quick-cancel">取消</button><button id="btn-quick-confirm">确认入账</button></div>
+            </div>
+          </section>
+          <section class="dashboard-panel today-focus-panel">
+            <header><div><h2>接下来要留意</h2><p>未来 7 天账单与最近的储蓄目标</p></div></header>
+            <div class="today-focus-block"><h3>固定账单</h3><div id="today-reminders"></div></div>
+            <div class="today-focus-block"><h3>储蓄目标</h3><div id="today-goals"></div></div>
+          </section>
+          <section class="dashboard-panel today-semester-panel">
+            <header><div><h2>本学期节奏</h2><p>在校与假期使用不同消费上下文</p></div></header>
+            <div id="today-semester"></div>
+          </section>
+        </div>
+      </div>
+
+      <div class="stage__canvas-wrap stage-view" data-stage-view="grid" hidden>
+        <canvas id="grid" aria-label="人生方格 Canvas"></canvas>
+        <div class="stage__hint" id="stage-hint">每一格代表你生命中的一天</div>
+      </div>
+
+      <div class="dashboard-view stage-view" data-stage-view="dashboard" hidden>
+        <section class="dashboard-kpis" aria-label="本月概览">
+          <article class="dashboard-kpi dashboard-kpi--balance">
+            <span>全部账户余额</span><strong id="dash-total-balance">¥0</strong><small id="dash-account-count">0 个账户</small>
+          </article>
+          <article class="dashboard-kpi dashboard-kpi--support">
+            <span>本月家庭支持</span><strong id="dash-family">¥0</strong><small>蓝色资金来源</small>
+          </article>
+          <article class="dashboard-kpi dashboard-kpi--independent">
+            <span>本月自主收入</span><strong id="dash-independent">¥0</strong><small id="dash-autonomy">自主覆盖 —</small>
+          </article>
+          <article class="dashboard-kpi dashboard-kpi--expense">
+            <span>本月支出</span><strong id="dash-expense">¥0</strong><small id="dash-net">净现金流 ¥0</small>
+          </article>
+        </section>
+
+        <div class="dashboard-grid">
+          <section class="dashboard-panel accounts-panel">
+            <header><div><h2>我的账户</h2><p>每一笔账都落到真实账户</p></div></header>
+            <div class="account-list" id="account-list"></div>
+            <div class="account-create">
+              <input id="account-name" type="text" maxlength="30" placeholder="新账户名称">
+              <select id="account-type" aria-label="账户类型">
+                <option value="bank">银行卡</option>
+                <option value="wechat">微信</option>
+                <option value="alipay">支付宝</option>
+                <option value="campus">校园卡</option>
+                <option value="cash">现金</option>
+                <option value="other">其他</option>
+              </select>
+              <div class="account-opening"><span>¥</span><input id="account-opening" type="number" step="0.01" placeholder="初始余额"></div>
+              <button id="btn-add-account">添加账户</button>
+              <p class="account-error" id="account-error" hidden></p>
+            </div>
+          </section>
+
+          <section class="dashboard-panel category-panel">
+            <header><div><h2>本月支出去向</h2><p id="dash-month-label">按分类查看</p></div></header>
+            <div class="category-bars" id="category-bars"></div>
+          </section>
+
+          <section class="dashboard-panel operations-panel">
+            <header><div><h2>账户操作</h2><p>内部转账不算收支，校准不伪造现金流</p></div></header>
+            <div class="account-operations">
+              <div class="operation-form">
+                <h3>账户间转账</h3>
+                <div class="operation-grid">
+                  <label><span>转出</span><select id="transfer-from" aria-label="转出账户"></select></label>
+                  <label><span>转入</span><select id="transfer-to" aria-label="转入账户"></select></label>
+                  <label><span>金额</span><input id="transfer-amount" type="number" min="0" step="0.01" placeholder="0.00"></label>
+                  <label><span>日期</span><input id="transfer-date" type="date"></label>
+                </div>
+                <input class="operation-note" id="transfer-note" type="text" maxlength="80" placeholder="备注（选填）">
+                <button id="btn-transfer">确认转账</button>
+                <p class="operation-error" id="transfer-error" hidden></p>
+              </div>
+
+              <div class="operation-form">
+                <h3>校准实际余额</h3>
+                <p class="operation-copy">当平台余额和手机里的实际余额不一致时使用。系统只记录差额。</p>
+                <label class="operation-full"><span>账户</span><select id="reconcile-account" aria-label="校准账户"></select></label>
+                <label class="operation-full"><span>实际余额</span><input id="reconcile-balance" type="number" step="0.01" placeholder="输入现在看到的余额"></label>
+                <input class="operation-note" id="reconcile-note" type="text" maxlength="80" value="余额校准">
+                <button id="btn-reconcile">校准余额</button>
+                <p class="operation-error" id="reconcile-error" hidden></p>
+              </div>
+
+              <div class="recent-transfers">
+                <h3>最近转账</h3>
+                <div id="transfer-list"></div>
+              </div>
+            </div>
+          </section>
+
+          <section class="dashboard-panel trend-panel">
+            <header><div><h2>近六个月趋势</h2><p>金色是自主收入，红色是支出</p></div></header>
+            <div class="trend-chart" id="trend-chart"></div>
+          </section>
+        </div>
+      </div>
+
+      <div class="planning-view stage-view" data-stage-view="planning" hidden>
+        <section class="planning-kpis" aria-label="资金预测">
+          <article class="planning-kpi planning-kpi--forecast">
+            <span>预计月底余额</span><strong id="plan-month-end">¥0</strong><small id="plan-month-end-note">等待规划参数</small>
+          </article>
+          <article class="planning-kpi">
+            <span>下次生活费</span><strong id="plan-next-date">—</strong><small id="plan-next-balance">到达前预计 ¥0</small>
+          </article>
+          <article class="planning-kpi planning-kpi--goals">
+            <span>目标已预留</span><strong id="plan-goal-allocated">¥0</strong><small id="plan-unallocated">尚未分配 ¥0</small>
+          </article>
+          <article class="planning-kpi">
+            <span>预测日花销</span><strong id="plan-daily-rate">¥0</strong><small id="plan-spending-basis">尚无支出样本</small>
+          </article>
+        </section>
+
+        <div class="planning-grid">
+          <section class="dashboard-panel plan-settings-panel">
+            <header><div><h2>生活费周期</h2><p>这里只做预测，不会自动记为收入</p></div></header>
+            <div class="plan-settings-form">
+              <label><span>每月生活费</span><div class="plan-money-input"><i>¥</i><input id="plan-allowance-amount" type="number" min="0" step="0.01" placeholder="例如 2000"></div></label>
+              <label><span>每月到账日</span><select id="plan-allowance-day" aria-label="每月生活费到账日"></select></label>
+              <label><span>每月支出预算</span><div class="plan-money-input"><i>¥</i><input id="plan-budget" type="number" min="0" step="0.01" placeholder="0 = 按真实花销估算"></div></label>
+              <button id="btn-save-plan">保存周期设置</button>
+              <p class="plan-status" id="plan-settings-status" hidden></p>
+            </div>
+            <div class="plan-explain">
+              <strong>预测怎样计算？</strong>
+              <p>有月预算时按预算的每日节奏估算；没有预算时依次使用本月真实花销速度和历史日均花销。预计生活费只进入预测，实际到账后仍需记一笔“家庭生活费”。</p>
+            </div>
+          </section>
+
+          <section class="dashboard-panel semester-panel">
+            <header><div><h2>大学生学期预算</h2><p>按一整个学期判断消费节奏，不把假期和在校混为一谈</p></div><strong id="semester-badge">尚未设置</strong></header>
+            <div class="semester-form">
+              <label><span>学期开始</span><input id="semester-start" type="date"></label>
+              <label><span>学期结束</span><input id="semester-end" type="date"></label>
+              <label><span>学期总预算</span><div class="plan-money-input"><i>¥</i><input id="semester-budget" type="number" min="0" step="0.01" placeholder="例如 9000"></div></label>
+              <label><span>当前模式</span><select id="semester-mode"><option value="in_school">在校</option><option value="vacation">寒暑假</option></select></label>
+              <button id="btn-save-semester">保存学期预算</button>
+            </div>
+            <p class="plan-status" id="semester-status" hidden></p>
+            <div class="semester-summary" id="semester-summary">
+              <div><span>已花</span><strong id="semester-actual">¥0</strong></div>
+              <div><span>剩余</span><strong id="semester-remaining">—</strong></div>
+              <div><span>建议日预算</span><strong id="semester-daily">—</strong></div>
+            </div>
+            <div class="semester-progress"><i id="semester-progress"></i></div>
+            <p class="semester-copy" id="semester-copy">设置后会结合真实支出计算学期进度。</p>
+          </section>
+
+          <section class="dashboard-panel goals-panel">
+            <header><div><h2>我的储蓄目标</h2><p>“已预留”是现有余额的用途标记，不是新增资产</p></div></header>
+            <div class="goal-create">
+              <input id="goal-name" type="text" maxlength="40" placeholder="目标名称，例如：新电脑">
+              <div class="plan-money-input"><i>¥</i><input id="goal-target" type="number" min="0" step="0.01" placeholder="目标金额"></div>
+              <div class="plan-money-input"><i>¥</i><input id="goal-saved" type="number" min="0" step="0.01" placeholder="目前已预留"></div>
+              <input id="goal-date" type="date" aria-label="目标日期">
+              <button id="btn-add-goal">添加目标</button>
+              <p class="plan-status plan-status--error" id="goal-error" hidden></p>
+            </div>
+            <div class="goal-list" id="goal-list"></div>
+          </section>
+
+          <section class="dashboard-panel budget-panel">
+            <header><div><h2>分类预算预警</h2><p>达到 80% 提醒，超过预算标红</p></div><strong class="budget-overall" id="budget-overall">尚未设置月预算</strong></header>
+            <div class="budget-list" id="budget-list"></div>
+            <button class="budget-save" id="btn-save-budgets">保存分类预算</button>
+            <p class="plan-status" id="budget-status" hidden></p>
+          </section>
+
+          <section class="dashboard-panel import-panel">
+            <header><div><h2>CSV 账单导入</h2><p>先预览校验，确认后才写入账本</p></div><button class="template-button" id="btn-download-template">下载空白模板</button></header>
+            <div class="import-controls">
+              <label class="import-file-label"><span>选择 UTF-8 / GB18030 CSV</span><input id="import-file" type="file" accept=".csv,text/csv"></label>
+              <label><span>未填写账户时记入</span><select id="import-account" aria-label="导入默认账户"></select></label>
+              <button id="btn-analyze-import">分析并预览</button>
+            </div>
+            <div class="import-summary" id="import-summary" hidden></div>
+            <div class="import-preview" id="import-preview"></div>
+            <button class="import-commit" id="btn-commit-import" disabled>确认导入 0 笔</button>
+            <p class="plan-status plan-status--error" id="import-error" hidden></p>
+            <p class="import-note">支持表头：日期/date、类型/type、金额/amount、分类/category、来源/source、备注/note、账户/account。收入缺少来源时保守归为家庭生活费。</p>
+            <div class="import-history" id="import-history"></div>
+          </section>
+        </div>
+      </div>
+
+      <div class="review-view stage-view" data-stage-view="review" hidden>
+        <section class="review-kpis" aria-label="本月复盘概览">
+          <article class="review-kpi"><span>本月净现金流</span><strong id="review-net">¥0</strong><small id="review-tx-count">0 笔交易</small></article>
+          <article class="review-kpi review-kpi--expense"><span>本月支出</span><strong id="review-expense">¥0</strong><small id="review-expense-change">暂无上月样本</small></article>
+          <article class="review-kpi review-kpi--bill"><span>固定账单待支付</span><strong id="review-bills">¥0</strong><small id="review-bill-count">0 项</small></article>
+          <article class="review-kpi review-kpi--alert"><span>到期提醒</span><strong id="review-alerts">0</strong><small>逾期与三日内到期</small></article>
+        </section>
+
+        <div class="review-grid">
+          <section class="dashboard-panel bill-calendar-panel">
+            <header><div><h2>固定支出日历</h2><p id="bill-calendar-month">本月</p></div><span class="calendar-legend"><i></i>待支付 <i></i>已支付</span></header>
+            <div class="weekday-row"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+            <div class="bill-calendar-grid" id="bill-calendar-grid"></div>
+          </section>
+
+          <section class="dashboard-panel bills-panel">
+            <header><div><h2>固定账单</h2><p>创建提醒不会自动扣款</p></div></header>
+            <div class="bill-create">
+              <input id="bill-name" type="text" maxlength="40" placeholder="账单名称，例如：校园网">
+              <div class="plan-money-input"><i>¥</i><input id="bill-amount" type="number" min="0" step="0.01" placeholder="金额"></div>
+              <select id="bill-day" aria-label="每月到期日"></select>
+              <select id="bill-category" aria-label="固定账单分类">
+                <option value="housing">住宿</option><option value="digital">数字服务</option><option value="study">学习</option>
+                <option value="transport">交通</option><option value="food">餐饮</option><option value="medical">医疗</option>
+                <option value="entertainment">娱乐</option><option value="social">社交</option><option value="other">其他</option>
+              </select>
+              <select id="bill-account" aria-label="固定账单支付账户"></select>
+              <input id="bill-note" type="text" maxlength="100" placeholder="备注（选填）">
+              <button id="btn-add-bill">添加固定账单</button>
+              <p class="plan-status plan-status--error" id="bill-error" hidden></p>
+            </div>
+            <div class="bill-list" id="bill-list"></div>
+          </section>
+
+          <section class="dashboard-panel monthly-review-panel">
+            <header><div><h2>月度复盘</h2><p>只依据已记录的真实数据，不做夸张结论</p></div></header>
+            <div class="review-facts">
+              <div><span>最大支出分类</span><strong id="review-top-category">—</strong></div>
+              <div><span>储蓄率</span><strong id="review-saving-rate">—</strong></div>
+              <div><span>固定账单计划</span><strong id="review-scheduled">¥0</strong></div>
+            </div>
+            <div class="review-observations" id="review-observations"></div>
+          </section>
+        </div>
+      </div>
+
+      <div class="data-view stage-view" data-stage-view="data" hidden>
+        <section class="data-kpis" aria-label="年度数据概览">
+          <article class="data-kpi"><span>年度收入</span><strong id="annual-income">¥0</strong><small id="annual-active-months">0 个活跃月份</small></article>
+          <article class="data-kpi data-kpi--expense"><span>年度支出</span><strong id="annual-expense">¥0</strong><small id="annual-tx-count">0 笔交易</small></article>
+          <article class="data-kpi data-kpi--net"><span>年度净现金流</span><strong id="annual-net">¥0</strong><small id="annual-saving-rate">储蓄率 —</small></article>
+          <article class="data-kpi"><span>筛选结果</span><strong id="search-count">0</strong><small id="search-net">净额 ¥0</small></article>
+        </section>
+
+        <div class="data-grid">
+          <section class="dashboard-panel annual-report-panel">
+            <header><div><h2>年度报告</h2><p>按真实账目汇总，不含规划中的预计收入</p></div><div class="annual-actions"><input id="annual-year" type="number" min="1900" max="2200" aria-label="报告年份"><button id="btn-load-annual">生成</button><button id="btn-export-annual">导出 CSV</button></div></header>
+            <div class="annual-chart" id="annual-chart"></div>
+            <div class="annual-detail">
+              <div><span>最佳现金流月份</span><strong id="annual-best-month">—</strong></div>
+              <div><span>最高支出月份</span><strong id="annual-highest-expense">—</strong></div>
+              <div><span>家庭支持 / 自主收入</span><strong id="annual-income-mix">¥0 / ¥0</strong></div>
+            </div>
+            <div class="annual-categories" id="annual-categories"></div>
+          </section>
+
+          <section class="dashboard-panel backup-panel">
+            <header><div><h2>备份与恢复</h2><p>导出完整 JSON；恢复前自动备份当前账本</p></div></header>
+            <button class="backup-export" id="btn-export-backup">导出完整备份</button>
+            <label class="restore-file"><span>选择由本平台导出的 JSON</span><input id="restore-file" type="file" accept=".json,application/json"></label>
+            <div class="restore-preview" id="restore-preview">尚未选择备份文件。</div>
+            <label class="restore-confirm"><span>确认恢复时输入“恢复”</span><input id="restore-confirm" type="text" autocomplete="off" placeholder="恢复"></label>
+            <button class="restore-button" id="btn-restore-backup" disabled>覆盖当前数据并恢复</button>
+            <p class="plan-status" id="backup-status" hidden></p>
+            <p class="restore-warning">恢复会覆盖当前全部模块数据，包括账本、健身、饮食、恢复、学习、待办、习惯、每日回顾、生活目标和里程碑。系统会先在 data 目录生成自动回退备份。</p>
+          </section>
+
+          <section class="dashboard-panel search-panel">
+            <header><div><h2>全局交易搜索</h2><p>按备注、账户、类型、分类和日期组合筛选</p></div></header>
+            <div class="search-filters">
+              <input id="search-query" type="search" placeholder="搜索备注、账户或金额">
+              <select id="search-type" aria-label="交易类型筛选"><option value="">全部类型</option><option value="income">收入</option><option value="expense">支出</option></select>
+              <select id="search-category" aria-label="支出分类筛选"><option value="">全部分类</option><option value="food">餐饮</option><option value="transport">交通</option><option value="study">学习</option><option value="housing">住宿</option><option value="medical">医疗</option><option value="entertainment">娱乐</option><option value="social">社交</option><option value="digital">数字服务</option><option value="other">其他</option></select>
+              <select id="search-account" aria-label="账户筛选"></select>
+              <input id="search-date-from" type="date" aria-label="开始日期">
+              <input id="search-date-to" type="date" aria-label="结束日期">
+              <button id="btn-search">搜索</button><button class="search-reset" id="btn-reset-search">重置</button>
+            </div>
+            <div class="search-summary" id="search-summary">尚未执行搜索。</div>
+            <div class="search-results" id="search-results"></div>
+          </section>
+        </div>
+      </div>
+      <div class="stage__footer">
+        <span id="stage-footer-text">设置生日后开始记录你的生活续航</span>
+      </div>
+    </section>
+
+  </main>
+
+  <main class="life-module tracker-module" data-module-panel="fitness" hidden>
+    <header class="life-module__head">
+      <div><span class="life-module__eyebrow">BODY · FITNESS</span><h1>个人健身</h1><p>记录完成了什么，而不是被复杂计划绑住。</p></div>
+      <button class="module-jump" data-module-jump="overview">返回生活总览 <span>→</span></button>
+    </header>
+    <section class="tracker-kpis">
+      <article><span>今天运动</span><strong><span id="fitness-today-minutes">0</span> 分钟</strong><small id="fitness-today-count">0 次记录</small></article>
+      <article><span>本周累计</span><strong><span id="fitness-week-minutes">0</span> 分钟</strong><small id="fitness-week-count">0 次记录</small></article>
+      <article><span>本周平均强度</span><strong id="fitness-week-intensity">—</strong><small>主观强度 1–10</small></article>
+    </section>
+    <div class="tracker-grid">
+      <section class="tracker-form-card">
+        <header><span>新增记录</span><h2>我刚刚完成了</h2></header>
+        <div class="tracker-form">
+          <label><span>活动类型</span><select id="fitness-activity"><option value="strength">力量训练</option><option value="cardio">有氧运动</option><option value="sport">球类 / 运动</option><option value="mobility">拉伸 / 灵活性</option><option value="other">其他活动</option></select></label>
+          <label><span>日期</span><input id="fitness-date" type="date"></label>
+          <label><span>时长（分钟）</span><input id="fitness-duration" type="number" min="1" max="1440" placeholder="30"></label>
+          <label><span>主观强度（1–10）</span><input id="fitness-intensity" type="range" min="1" max="10" value="5"><output id="fitness-intensity-output">5</output></label>
+          <label class="tracker-form__wide"><span>备注（可选）</span><input id="fitness-note" type="text" maxlength="120" placeholder="例如：操场慢跑，状态不错"></label>
+          <button id="btn-add-workout">保存健身记录</button><p class="tracker-status" id="fitness-status" hidden></p>
+        </div>
+      </section>
+      <section class="tracker-list-card"><header><span>最近记录</span><h2>我的身体轨迹</h2></header><div class="tracker-list" id="fitness-list"></div></section>
+    </div>
+  </main>
+
+  <main class="life-module tracker-module" data-module-panel="nutrition" hidden>
+    <header class="life-module__head">
+      <div><span class="life-module__eyebrow">BODY · NUTRITION</span><h1>个人饮食</h1><p>先记下吃了什么；热量和营养数据都可以留空。</p></div>
+      <button class="module-jump" data-module-jump="overview">返回生活总览 <span>→</span></button>
+    </header>
+    <section class="tracker-kpis tracker-kpis--nutrition">
+      <article><span>今天已记录</span><strong><span id="nutrition-today-count">0</span> 次</strong><small>包括正餐、加餐和饮水</small></article>
+      <article><span>已知热量</span><strong><span id="nutrition-calories">0</span> kcal</strong><small id="nutrition-calories-note">尚无可汇总数值</small></article>
+      <article><span>蛋白质 / 饮水</span><strong><span id="nutrition-protein">0</span>g · <span id="nutrition-water">0</span>ml</strong><small>仅汇总你主动填写的数值</small></article>
+    </section>
+    <div class="tracker-grid">
+      <section class="tracker-form-card">
+        <header><span>新增记录</span><h2>这一餐 / 这一杯</h2></header>
+        <div class="tracker-form">
+          <label><span>类型</span><select id="nutrition-type"><option value="breakfast">早餐</option><option value="lunch">午餐</option><option value="dinner">晚餐</option><option value="snack">加餐 / 饮水</option></select></label>
+          <label><span>日期</span><input id="nutrition-date" type="date"></label>
+          <label class="tracker-form__wide"><span>吃了什么</span><input id="nutrition-name" type="text" maxlength="80" placeholder="例如：食堂午餐 / 一杯水"></label>
+          <label><span>热量 kcal（可选）</span><input id="nutrition-calories-input" type="number" min="0" max="10000" placeholder="留空也可以"></label>
+          <label><span>蛋白质 g（可选）</span><input id="nutrition-protein-input" type="number" min="0" max="1000" step="0.1" placeholder="留空也可以"></label>
+          <label><span>饮水 ml（可选）</span><input id="nutrition-water-input" type="number" min="0" max="10000" placeholder="例如 300"></label>
+          <label class="tracker-form__wide"><span>备注（可选）</span><input id="nutrition-note" type="text" maxlength="120" placeholder="例如：七分饱"></label>
+          <button id="btn-add-nutrition">保存饮食记录</button><p class="tracker-status" id="nutrition-status" hidden></p>
+        </div>
+      </section>
+      <section class="tracker-list-card"><header><span>最近记录</span><h2>我的饮食轨迹</h2></header><div class="tracker-list" id="nutrition-list"></div></section>
+    </div>
+  </main>
+
+  <main class="life-module tracker-module" data-module-panel="recovery" hidden>
+    <header class="life-module__head">
+      <div><span class="life-module__eyebrow">BODY · RECOVERY</span><h1>睡眠与恢复</h1><p>记录自己的感受，不把主观状态包装成医疗结论。</p></div>
+      <button class="module-jump" data-module-jump="overview">返回生活总览 <span>→</span></button>
+    </header>
+    <section class="tracker-kpis tracker-kpis--recovery">
+      <article><span>最近睡眠</span><strong id="recovery-latest-sleep">—</strong><small id="recovery-latest-date">尚未记录</small></article>
+      <article><span>七日平均睡眠</span><strong id="recovery-week-sleep">—</strong><small id="recovery-week-count">0 天有记录</small></article>
+      <article><span>今天精力 / 心情</span><strong id="recovery-today-state">—</strong><small>主观状态 1–5</small></article>
+    </section>
+    <div class="tracker-grid">
+      <section class="tracker-form-card">
+        <header><span>每日记录</span><h2>今天恢复得怎么样</h2></header>
+        <div class="tracker-form">
+          <label><span>日期</span><input id="recovery-date" type="date"></label>
+          <label><span>睡眠时长（小时，可选）</span><input id="recovery-sleep-hours" type="number" min="0" max="24" step="0.1" placeholder="例如 7.5"></label>
+          <label><span>睡眠感受（可选）</span><select id="recovery-sleep-quality"><option value="">未填写</option><option value="1">1 · 很差</option><option value="2">2 · 较差</option><option value="3">3 · 一般</option><option value="4">4 · 不错</option><option value="5">5 · 很好</option></select></label>
+          <label><span>精力（可选）</span><select id="recovery-energy"><option value="">未填写</option><option value="1">1 · 很低</option><option value="2">2 · 较低</option><option value="3">3 · 一般</option><option value="4">4 · 不错</option><option value="5">5 · 很好</option></select></label>
+          <label><span>心情（可选）</span><select id="recovery-mood"><option value="">未填写</option><option value="1">1 · 很差</option><option value="2">2 · 较差</option><option value="3">3 · 一般</option><option value="4">4 · 不错</option><option value="5">5 · 很好</option></select></label>
+          <label class="tracker-form__wide"><span>备注（可选）</span><input id="recovery-note" type="text" maxlength="120" placeholder="例如：午后有些困，晚上早点休息"></label>
+          <button id="btn-save-recovery">保存今天的恢复记录</button><p class="tracker-status" id="recovery-status" hidden></p>
+        </div>
+      </section>
+      <section class="tracker-list-card"><header><span>最近记录</span><h2>我的恢复轨迹</h2></header><div class="tracker-list" id="recovery-list"></div></section>
+    </div>
+  </main>
+
+  <main class="life-module tracker-module" data-module-panel="study" hidden>
+    <header class="life-module__head">
+      <div><span class="life-module__eyebrow">GROWTH · STUDY</span><h1>学习与专注</h1><p>只记录已经完成的专注，不用计划数字制造压力。</p></div>
+      <button class="module-jump" data-module-jump="overview">返回生活总览 <span>→</span></button>
+    </header>
+    <section class="tracker-kpis tracker-kpis--study">
+      <article><span>今天专注</span><strong><span id="study-today-minutes">0</span> 分钟</strong><small id="study-today-count">0 次记录</small></article>
+      <article><span>本周累计</span><strong><span id="study-week-minutes">0</span> 分钟</strong><small id="study-week-count">0 次记录</small></article>
+      <article><span>本周平均专注度</span><strong id="study-week-focus">—</strong><small>主观专注度 1–5</small></article>
+    </section>
+    <div class="tracker-grid">
+      <section class="tracker-form-card">
+        <header><span>新增记录</span><h2>我刚刚专注于</h2></header>
+        <div class="tracker-form">
+          <label class="tracker-form__wide"><span>科目 / 内容</span><input id="study-subject" type="text" maxlength="80" placeholder="例如：高等数学 / 英语阅读"></label>
+          <label><span>日期</span><input id="study-date" type="date"></label>
+          <label><span>时长（分钟）</span><input id="study-duration" type="number" min="1" max="1440" placeholder="45"></label>
+          <label><span>主观专注度（1–5）</span><input id="study-focus" type="range" min="1" max="5" value="3"><output id="study-focus-output">3</output></label>
+          <label class="tracker-form__wide"><span>备注（可选）</span><input id="study-note" type="text" maxlength="120" placeholder="例如：复习了定积分，例题还需再看"></label>
+          <button id="btn-add-study">保存学习记录</button><p class="tracker-status" id="study-status" hidden></p>
+        </div>
+      </section>
+      <section class="tracker-list-card"><header><span>最近记录</span><h2>我的学习轨迹</h2></header><div class="tracker-list" id="study-list"></div></section>
+    </div>
+  </main>
+
+  <main class="life-module rhythm-module" data-module-panel="rhythm" hidden>
+    <header class="life-module__head">
+      <div><span class="life-module__eyebrow">DAILY · RHYTHM</span><h1>日程与习惯</h1><p>一次性待办和重复习惯放在一起看，但不混为一谈。</p></div>
+      <button class="module-jump" data-module-jump="overview">返回生活总览 <span>→</span></button>
+    </header>
+    <section class="tracker-kpis rhythm-kpis">
+      <article><span>今日待办</span><strong id="rhythm-task-progress">0 / 0</strong><small id="rhythm-task-note">今天还没有待办</small></article>
+      <article><span>逾期未完成</span><strong id="rhythm-overdue">0</strong><small>逾期只是日期状态</small></article>
+      <article><span>今日习惯</span><strong id="rhythm-habit-progress">0 / 0</strong><small id="rhythm-habit-note">还没有每日习惯</small></article>
+    </section>
+    <div class="rhythm-grid">
+      <section class="tracker-form-card rhythm-card">
+        <header><span>一次性行动</span><h2>待办清单</h2></header>
+        <div class="rhythm-create rhythm-create--task">
+          <input id="task-title" type="text" maxlength="100" placeholder="例如：提交课程作业" aria-label="待办标题">
+          <input id="task-due" type="date" aria-label="待办日期">
+          <select id="task-priority" aria-label="待办优先级"><option value="normal">普通优先级</option><option value="high">高优先级</option><option value="low">低优先级</option></select>
+          <select id="task-category" aria-label="待办分类"><option value="personal">个人</option><option value="study">学习</option><option value="health">身体</option><option value="finance">财务</option><option value="other">其他</option></select>
+          <button id="btn-add-task">添加待办</button>
+          <p class="tracker-status" id="task-status" hidden></p>
+        </div>
+        <div class="rhythm-list" id="task-list"></div>
+      </section>
+      <section class="tracker-list-card rhythm-card">
+        <header><span>重复实践</span><h2>每日习惯</h2></header>
+        <div class="rhythm-create rhythm-create--habit">
+          <input id="habit-name" type="text" maxlength="60" placeholder="例如：阅读 20 分钟" aria-label="习惯名称">
+          <select id="habit-category" aria-label="习惯分类"><option value="personal">个人</option><option value="study">学习</option><option value="health">身体</option><option value="finance">财务</option><option value="other">其他</option></select>
+          <button id="btn-add-habit">添加每日习惯</button>
+          <p class="tracker-status" id="habit-status" hidden></p>
+        </div>
+        <div class="rhythm-list" id="habit-list"></div>
+      </section>
+    </div>
+  </main>
+
+  <main class="life-module reflection-module" data-module-panel="reflection" hidden>
+    <header class="life-module__head">
+      <div><span class="life-module__eyebrow">LIFE · REFLECTION</span><h1>日记与复盘</h1><p>写下自己的解释，再用一周的真实记录看见生活全貌。</p></div>
+      <button class="module-jump" data-module-jump="overview">返回生活总览 <span>→</span></button>
+    </header>
+    <section class="tracker-kpis reflection-kpis">
+      <article><span>本周支出</span><strong id="reflection-week-expense">¥0</strong><small>只汇总已记录交易</small></article>
+      <article><span>身体活动</span><strong id="reflection-week-fitness">0 分钟</strong><small id="reflection-week-fitness-note">本周 0 次</small></article>
+      <article><span>学习专注</span><strong id="reflection-week-study">0 分钟</strong><small id="reflection-week-study-note">本周 0 次</small></article>
+      <article><span>平均睡眠</span><strong id="reflection-week-sleep">—</strong><small id="reflection-week-sleep-note">尚无睡眠记录</small></article>
+    </section>
+    <div class="reflection-grid">
+      <section class="tracker-form-card reflection-compose">
+        <header><span>每日回顾</span><h2>给今天留下一点文字</h2><small>四项任选一项；同一天再次保存会更新原记录。</small></header>
+        <div class="reflection-form">
+          <label><span>日期</span><input id="reflection-date" type="date"></label>
+          <label><span>今天的亮点</span><textarea id="reflection-highlight" maxlength="500" rows="3" placeholder="哪件事值得记住？"></textarea></label>
+          <label><span>遇到的困难</span><textarea id="reflection-challenge" maxlength="500" rows="3" placeholder="什么让你觉得不顺或费力？"></textarea></label>
+          <label><span>想感谢的人或事</span><textarea id="reflection-gratitude" maxlength="500" rows="3" placeholder="可以是一件很小的事。"></textarea></label>
+          <label><span>自由记录</span><textarea id="reflection-note" maxlength="1200" rows="4" placeholder="其他想对自己说的话。"></textarea></label>
+          <button id="btn-save-reflection">保存这一天的回顾</button>
+          <p class="tracker-status" id="reflection-status" hidden></p>
+        </div>
+      </section>
+      <div class="reflection-side">
+        <section class="reflection-week-card">
+          <header><div><span>每周快照</span><h2 id="reflection-week-range">本周</h2></div><small>0 代表没有记录，不代表没有发生</small></header>
+          <div class="reflection-facts">
+            <article><span>账本</span><strong id="reflection-week-finance-detail">0 笔 · 收入 ¥0</strong></article>
+            <article><span>饮食</span><strong id="reflection-week-nutrition-detail">0 次 · 饮水 0ml</strong></article>
+            <article><span>恢复</span><strong id="reflection-week-recovery-detail">精力 — · 心情 —</strong></article>
+            <article><span>节奏</span><strong id="reflection-week-rhythm-detail">待办 0 / 0 · 习惯 0 次</strong></article>
+            <article><span>回顾</span><strong id="reflection-week-reflection-count">本周已写 0 天</strong></article>
+          </div>
+        </section>
+        <section class="tracker-list-card reflection-history">
+          <header><span>最近记录</span><h2>我的回顾轨迹</h2></header>
+          <div class="tracker-list" id="reflection-list"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div class="life-search-overlay" id="life-search-overlay" hidden>
+    <section class="life-search-dialog" role="dialog" aria-modal="true" aria-labelledby="life-search-title">
+      <header class="life-search-head">
+        <div><span>GLOBAL · SEARCH</span><h2 id="life-search-title">搜索我的生活</h2><p>一次查找全部来源模块；编辑与删除仍回到来源模块进行。</p></div>
+        <button id="btn-close-life-search" aria-label="关闭全局搜索">×</button>
+      </header>
+      <div class="life-search-query">
+        <span aria-hidden="true">⌕</span>
+        <input id="life-search-input" type="search" maxlength="100" autocomplete="off" placeholder="搜索课程、午饭、跑步、待办、回顾或目标…">
+        <button id="btn-run-life-search">搜索</button>
+      </div>
+      <div class="life-search-filters">
+        <label><span>来源模块</span><select id="life-search-module"><option value="">全部模块</option><option value="finance">个人账本</option><option value="fitness">健身</option><option value="nutrition">饮食</option><option value="recovery">恢复</option><option value="study">学习</option><option value="rhythm">节奏</option><option value="reflection">复盘</option><option value="goals">目标</option></select></label>
+        <label><span>开始日期</span><input id="life-search-date-from" type="date"></label>
+        <label><span>结束日期</span><input id="life-search-date-to" type="date"></label>
+        <button id="btn-reset-life-search">清除筛选</button>
+      </div>
+      <div class="life-search-result-head"><strong id="life-search-summary">输入关键词开始搜索</strong><small>结果只用于定位，不会改变数据</small></div>
+      <div class="life-search-results" id="life-search-results"><div class="life-search-empty">可以搜索记录正文、显示名称、分类和金额。</div></div>
+      <p class="tracker-status" id="life-search-status" hidden></p>
+    </section>
+  </div>
+
+  <!-- 引导/设置对话 -->
+  <div class="overlay" id="overlay" hidden>
+    <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+      <header class="modal__head">
+        <h2 id="modal-title">建立我的个人生活坐标</h2>
+        <p>告诉我你的生日，我们计算从今天起到 <strong id="modal-target-age-display">80</strong> 岁还有多少天，并区分支持与自主所得。</p>
+      </header>
+      <div class="modal__body">
+        <div class="field">
+          <span class="field__label">出生日期</span>
+          <div class="date-input" data-picker>
+            <input type="hidden" id="cfg-birth" required>
+            <button type="button" class="date-input__trigger" aria-haspopup="dialog">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+              <span class="date-input__value">选择出生日期</span>
+            </button>
+            <div class="date-popover" hidden role="dialog" aria-label="日期选择">
+              <header class="date-popover__head">
+                <button type="button" class="date-popover__nav" data-nav="prev-year" aria-label="上一年">«</button>
+                <button type="button" class="date-popover__nav" data-nav="prev" aria-label="上一月">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+                </button>
+                <span class="date-popover__title"></span>
+                <button type="button" class="date-popover__nav" data-nav="next" aria-label="下一月">
+                  <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+                </button>
+                <button type="button" class="date-popover__nav" data-nav="next-year" aria-label="下一年">»</button>
+              </header>
+              <div class="date-popover__weekdays"><span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span></div>
+              <div class="date-popover__grid"></div>
+              <footer class="date-popover__foot">
+                <button type="button" class="date-popover__btn" data-action="today">今天</button>
+              </footer>
+            </div>
+          </div>
+        </div>
+        <label class="field">
+          <span class="field__label">目标年龄</span>
+          <div class="field__row">
+            <input id="cfg-target-age" type="number" min="20" max="120" value="80">
+            <span class="field__suffix">岁</span>
+          </div>
+        </label>
+        <label class="toggle" for="cfg-show-past">
+          <span class="toggle__head">
+            <span class="toggle__title">显示过去</span>
+            <span class="toggle__hint">关闭：第一格 = 今天 · 打开：从 0 岁开始全寿命方格</span>
+          </span>
+          <input type="checkbox" id="cfg-show-past" role="switch">
+          <span class="toggle__track" aria-hidden="true"><span class="toggle__thumb"></span></span>
+        </label>
+        <div class="settings-note">
+          <strong>资金余额已由账户管理</strong>
+          <span>起始存款已经安全迁移到“日常资金”。新增银行卡、微信或校园卡，请前往资金驾驶舱。</span>
+        </div>
+        <label class="field">
+          <span class="field__label">记账天数（手动覆盖 · 0=自动）</span>
+          <div class="field__row">
+            <input id="cfg-tracking-days" type="number" inputmode="numeric" min="0" step="1" placeholder="0">
+            <span class="field__suffix">天</span>
+          </div>
+        </label>
+        <label class="field">
+          <span class="field__label">日均花销（手动覆盖 · 0=自动）</span>
+          <div class="field__row">
+            <span class="field__prefix">¥</span>
+            <input id="cfg-avg-expense" type="number" inputmode="decimal" min="0" step="1" placeholder="0">
+          </div>
+        </label>
+      </div>
+      <footer class="modal__foot">
+        <button class="btn btn--ghost" id="cfg-cancel">取消</button>
+        <button class="btn btn--primary" id="cfg-save"><span class="btn__text">开始</span></button>
+      </footer>
+    </div>
+  </div>
+
+  <!-- 未来资金全覆盖彩蛋 -->
+  <div class="freedom-banner" id="freedom-banner" hidden aria-live="polite">
+    <div class="freedom-banner__veil"></div>
+    <div class="freedom-banner__ripple"></div>
+    <div class="freedom-banner__ripple"></div>
+    <div class="freedom-banner__ripple"></div>
+    <div class="freedom-banner__ripple"></div>
+    <div class="freedom-banner__ripple"></div>
+    <div class="freedom-banner__inner">
+      <div class="freedom-banner__eyebrow">YOUR FUTURE IS FULLY FUNDED</div>
+      <div class="freedom-banner__word">FREE</div>
+      <div class="freedom-banner__zh">未 来 已 点 亮</div>
+      <div class="freedom-banner__sub">你当前可支配的资金已经覆盖人生剩余的所有方格</div>
+    </div>
+  </div>
+
+  <script src="./grid.js"></script>
+  <script src="./app.js?v=20260805-life-platform-7"></script>
+</body>
+</html>

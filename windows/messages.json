@@ -1,0 +1,12 @@
+{
+  "title": "我的生活中枢",
+  "alreadyStarting": "我的生活中枢正在启动，请稍候。",
+  "firstSetup": "这是第一次启动，需要准备本地运行环境。完成后会自动打开浏览器，通常只需几分钟。",
+  "installingDependencies": "正在安装首次运行所需组件。完成后会自动打开浏览器，请稍候。",
+  "pythonMissing": "没有找到可用的 Python 3.9 或更高版本。接下来会打开 Python 官方下载页。安装时请勾选 Add Python to PATH，安装完成后再双击启动器。",
+  "startupFailed": "启动失败。详细信息已写入 data\\launcher.log。\n\n",
+  "serverFailed": "本地服务未能正常启动。请查看 data\\server-error.log。\n\n",
+  "stopped": "我的生活中枢已停止。浏览器页面现在可以关闭。",
+  "notRunning": "我的生活中枢当前没有运行。",
+  "stopFailed": "停止失败。详细信息：\n\n"
+}

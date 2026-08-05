@@ -1,0 +1,7 @@
+# 仓库里统一存 LF，检出时由 Git 按平台处理，避免 Windows 上产生整文件的换行 diff
+* text=auto eol=lf
+
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+*.db binary

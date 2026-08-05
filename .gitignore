@@ -1,0 +1,7 @@
+.venv/
+data/*.db
+data/*.log
+data/server-process.json
+__pycache__/
+*.pyc
+.DS_Store
