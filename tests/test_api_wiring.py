@@ -7,6 +7,7 @@ import unittest
 
 from backend import main
 from backend.api import (
+    capture,
     fitness,
     goals,
     ledger,
@@ -21,6 +22,7 @@ from backend.api import (
 
 ROUTERS = {
     "platform": platform.router,
+    "capture": capture.router,
     "ledger": ledger.router,
     "fitness": fitness.router,
     "nutrition": nutrition.router,

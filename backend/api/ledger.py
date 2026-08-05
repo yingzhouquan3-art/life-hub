@@ -17,6 +17,7 @@ from backend.core.db import db
 from backend.modules.ledger import (
     compute_monthly,
     compute_stats,
+    create_transaction,
     get_accounts,
     get_annual_report,
     get_financial_calendar,
@@ -719,37 +720,19 @@ def reconcile_account(account_id: int, body: ReconcileIn):
 def add_transaction(body: TransactionIn):
     with db() as conn:
         before = compute_stats(conn)
-        when = body.occurred_on or date.today().isoformat()
-        date.fromisoformat(when)
-        source = (body.source or "family_support") if body.type == "income" else "expense"
-        category = "income" if body.type == "income" else (body.category or "other")
-        account_id = body.account_id
-        if account_id is None:
-            default_account = conn.execute(
-                "SELECT id FROM accounts WHERE is_active = 1 ORDER BY id LIMIT 1"
-            ).fetchone()
-            if not default_account:
-                raise HTTPException(400, "no active account")
-            account_id = default_account["id"]
-        if not conn.execute(
-            "SELECT 1 FROM accounts WHERE id = ? AND is_active = 1", (account_id,)
-        ).fetchone():
-            raise HTTPException(400, "invalid account")
-        cur = conn.execute(
-            """INSERT INTO transactions
-               (occurred_on, type, source, category, account_id, amount, note, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            (when, body.type, source, category, account_id, body.amount, body.note, datetime.now().isoformat()),
+        tx = create_transaction(
+            conn,
+            occurred_on=body.occurred_on,
+            type=body.type,
+            amount=body.amount,
+            source=body.source,
+            category=body.category,
+            account_id=body.account_id,
+            note=body.note,
         )
-        tx_id = cur.lastrowid
         after = compute_stats(conn)
         delta = after["lit_count"] - before["lit_count"]
         animation = "light_up" if delta > 0 else ("extinguish" if delta < 0 else "none")
-        tx = dict(conn.execute(
-            """SELECT t.*, a.name AS account_name FROM transactions t
-               LEFT JOIN accounts a ON a.id = t.account_id WHERE t.id = ?""",
-            (tx_id,),
-        ).fetchone())
         return {
             "transaction": tx,
             "stats": after,

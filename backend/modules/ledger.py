@@ -911,6 +911,49 @@ def get_annual_report(conn, year: int) -> dict:
     }
 
 
+def create_transaction(
+    conn, *, occurred_on: Optional[str] = None, type: str, amount: float,
+    source: Optional[str] = None, category: Optional[str] = None,
+    account_id: Optional[int] = None, note: str = "",
+) -> dict:
+    """写入一笔交易，返回带账户名的完整记录。
+
+    收入的 source 与支出的 category 在这里归一，不接受两者混用；
+    没有指定账户时落到第一个启用账户。
+    """
+    when = occurred_on or date.today().isoformat()
+    date.fromisoformat(when)
+    if type not in ("income", "expense"):
+        raise HTTPException(400, "type must be income or expense")
+    if amount is None or amount <= 0:
+        raise HTTPException(400, "金额必须大于 0")
+    resolved_source = (source or "family_support") if type == "income" else "expense"
+    resolved_category = "income" if type == "income" else (category or "other")
+    if account_id is None:
+        default_account = conn.execute(
+            "SELECT id FROM accounts WHERE is_active = 1 ORDER BY id LIMIT 1"
+        ).fetchone()
+        if not default_account:
+            raise HTTPException(400, "no active account")
+        account_id = default_account["id"]
+    if not conn.execute(
+        "SELECT 1 FROM accounts WHERE id = ? AND is_active = 1", (account_id,)
+    ).fetchone():
+        raise HTTPException(400, "invalid account")
+    cur = conn.execute(
+        """INSERT INTO transactions
+           (occurred_on, type, source, category, account_id, amount, note, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (when, type, resolved_source, resolved_category, account_id, amount, note,
+         datetime.now().isoformat()),
+    )
+    return dict(conn.execute(
+        """SELECT t.*, a.name AS account_name FROM transactions t
+           LEFT JOIN accounts a ON a.id = t.account_id WHERE t.id = ?""",
+        (cur.lastrowid,),
+    ).fetchone())
+
+
 def migrate(conn) -> None:
     """旧库兼容：补列、回填分类与来源、确保存在一个默认账户。
 

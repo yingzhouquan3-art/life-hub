@@ -25,6 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from backend.api import capture as capture_api
 from backend.api import fitness as fitness_api
 from backend.api import goals as goals_api
 from backend.api import ledger as ledger_api
@@ -66,6 +67,7 @@ app.include_router(rhythm_api.router)
 app.include_router(reflection_api.router)
 app.include_router(goals_api.router)
 app.include_router(views_api.router)
+app.include_router(capture_api.router)
 
 
 # ---------- Static ----------
