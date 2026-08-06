@@ -29,6 +29,7 @@ from backend.api import body as body_api
 from backend.api import capture as capture_api
 from backend.api import fitness as fitness_api
 from backend.api import goals as goals_api
+from backend.api import inbox as inbox_api
 from backend.api import ledger as ledger_api
 from backend.api import nutrition as nutrition_api
 from backend.api import platform as platform_api
@@ -95,6 +96,7 @@ app.include_router(goals_api.router)
 app.include_router(views_api.router)
 app.include_router(capture_api.router)
 app.include_router(quick_api.router)
+app.include_router(inbox_api.router)
 app.include_router(statements_api.router)
 
 

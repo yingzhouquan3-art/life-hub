@@ -573,6 +573,9 @@ def get_financial_calendar(conn, target_month: Optional[str] = None) -> dict:
     bills = []
     for row in rows:
         item = dict(row)
+        # 季付与年付只在到期的那个月出现，否则日历会月月提醒一笔并不会扣的钱
+        if not bill_due_in_month(item, start.year, start.month):
+            continue
         due_date = date(start.year, start.month, min(int(item["day_of_month"]), days_in_month))
         is_paid = bool(item["payment_id"] and item["transaction_exists"])
         days_until = (due_date - today).days if start.year == today.year and start.month == today.month else None
@@ -954,6 +957,99 @@ def create_transaction(
     ).fetchone())
 
 
+# ---------- 订阅与固定支出 ----------
+
+CYCLES = {"monthly": 1, "quarterly": 3, "yearly": 12}
+CYCLE_LABELS = {"monthly": "每月", "quarterly": "每季", "yearly": "每年"}
+
+
+def bill_due_in_month(bill: dict, year: int, month: int) -> bool:
+    """这笔固定支出在指定月份是否到期。
+
+    每月的每月都到期；季付与年付按锚点月份推算。
+    没有锚点月份的非月付账单，保守地按「首次记录的那个月」为锚点是做不到的
+    （建单时没记），所以退化成每月——宁可多提醒，不要漏提醒。
+    """
+    cycle = bill.get("cycle") or "monthly"
+    if cycle == "monthly":
+        return True
+    step = CYCLES.get(cycle)
+    if not step:
+        return True
+    anchor = bill.get("anchor_month")
+    if not anchor:
+        return True
+    return (month - int(anchor)) % step == 0
+
+
+def get_subscription_overview(conn) -> dict:
+    """我到底订了多少东西，一个月和一年各要花多少。
+
+    月均成本是把年付摊到每个月，方便横向比较；
+    它是一个换算值，不是某个月真的会扣这么多。
+    """
+    rows = conn.execute(
+        """SELECT b.*, a.name AS account_name FROM recurring_bills b
+           JOIN accounts a ON a.id = b.account_id
+           WHERE b.is_active = 1
+           ORDER BY b.day_of_month, b.id"""
+    ).fetchall()
+
+    today = date.today()
+    items = []
+    monthly_total = 0.0
+    by_category: dict[str, float] = {}
+    for row in rows:
+        bill = dict(row)
+        cycle = bill.get("cycle") or "monthly"
+        months = CYCLES.get(cycle, 1)
+        amount = float(bill["amount"])
+        per_month = round(amount / months, 2)
+        monthly_total += per_month
+        by_category[bill["category"]] = round(
+            by_category.get(bill["category"], 0.0) + per_month, 2
+        )
+
+        next_due = None
+        for offset in range(0, 13):
+            candidate = shift_month(month_start(today), offset)
+            if not bill_due_in_month(bill, candidate.year, candidate.month):
+                continue
+            days_in_month = monthrange(candidate.year, candidate.month)[1]
+            due = date(candidate.year, candidate.month,
+                       min(int(bill["day_of_month"]), days_in_month))
+            if due >= today:
+                next_due = due
+                break
+
+        items.append({
+            **bill,
+            "cycle": cycle,
+            "cycle_label": CYCLE_LABELS.get(cycle, cycle),
+            "monthly_cost": per_month,
+            "yearly_cost": round(amount * (12 / months), 2),
+            "next_due": next_due.isoformat() if next_due else None,
+            "days_until_due": (next_due - today).days if next_due else None,
+        })
+
+    items.sort(key=lambda item: (item["days_until_due"] is None, item["days_until_due"] or 0))
+    return {
+        "items": items,
+        "summary": {
+            "count": len(items),
+            "monthly_total": round(monthly_total, 2),
+            "yearly_total": round(monthly_total * 12, 2),
+            "by_category": by_category,
+            "due_within_7_days": [
+                item["name"] for item in items
+                if item["days_until_due"] is not None and item["days_until_due"] <= 7
+            ],
+        },
+        "cycle_labels": CYCLE_LABELS,
+        "note": "月均成本把年付摊到每个月，方便比较；它是换算值，不是某个月真会扣这么多。",
+    }
+
+
 def migrate(conn) -> None:
     """旧库兼容：补列、回填分类与来源、确保存在一个默认账户。
 
@@ -997,6 +1093,16 @@ def migrate(conn) -> None:
            WHERE type = 'expense' AND category NOT IN
            ('food','transport','study','housing','medical','entertainment','social','digital','other')"""
     )
+
+    # 固定账单原本隐含「每月一次」；补上计费周期与年付/季付的锚点月份。
+    # 旧数据一律按每月处理，语义不变。
+    bill_cols = [r[1] for r in conn.execute("PRAGMA table_info(recurring_bills)").fetchall()]
+    if "cycle" not in bill_cols:
+        conn.execute(
+            "ALTER TABLE recurring_bills ADD COLUMN cycle TEXT NOT NULL DEFAULT 'monthly'"
+        )
+    if "anchor_month" not in bill_cols:
+        conn.execute("ALTER TABLE recurring_bills ADD COLUMN anchor_month INTEGER")
 
     default_account = conn.execute("SELECT id FROM accounts ORDER BY id LIMIT 1").fetchone()
     if not default_account:
@@ -1143,7 +1249,8 @@ MODULE = LifeModule(
         "semester_settings": ["id", "start_date", "end_date", "total_budget", "mode", "updated_at"],
         "savings_goals": ["id", "name", "target_amount", "saved_amount", "target_date", "is_active", "created_at"],
         "category_budgets": ["category", "amount", "updated_at"],
-        "recurring_bills": ["id", "name", "amount", "day_of_month", "category", "account_id", "note", "is_active", "created_at"],
+        "recurring_bills": ["id", "name", "amount", "day_of_month", "category", "account_id",
+                           "note", "is_active", "created_at", "cycle", "anchor_month"],
         "recurring_bill_payments": ["id", "bill_id", "month", "transaction_id", "paid_on", "created_at"],
     },
     optional_tables=frozenset({"semester_settings"}),

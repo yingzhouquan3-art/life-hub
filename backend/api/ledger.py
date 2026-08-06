@@ -24,6 +24,7 @@ from backend.modules.ledger import (
     get_import_batches,
     get_planning,
     get_recent_transfers,
+    get_subscription_overview,
     get_today_overview,
     parse_quick_entry,
 )
@@ -120,6 +121,9 @@ class RecurringBillIn(BaseModel):
     name: str = Field(..., min_length=1, max_length=40)
     amount: float = Field(..., gt=0)
     day_of_month: int = Field(..., ge=1, le=28)
+    cycle: Literal["monthly", "quarterly", "yearly"] = "monthly"
+    # 季付与年付的锚点月份（1-12）。留空表示无法推算，退化成每月提醒。
+    anchor_month: Optional[int] = Field(None, ge=1, le=12)
     category: Literal["food", "transport", "study", "housing", "medical", "entertainment", "social", "digital", "other"]
     account_id: int
     note: str = Field("", max_length=100)
@@ -248,6 +252,13 @@ def get_calendar_state(month: Optional[str] = None):
         return get_financial_calendar(conn, month)
 
 
+@router.get("/api/subscriptions")
+def subscription_overview():
+    """我到底订了多少东西，一个月和一年各要花多少。"""
+    with db() as conn:
+        return get_subscription_overview(conn)
+
+
 @router.post("/api/bills")
 def add_recurring_bill(body: RecurringBillIn):
     name = body.name.strip()
@@ -258,14 +269,23 @@ def add_recurring_bill(body: RecurringBillIn):
             "SELECT 1 FROM accounts WHERE id = ? AND is_active = 1", (body.account_id,)
         ).fetchone():
             raise HTTPException(400, "invalid account")
+        anchor = body.anchor_month
+        if body.cycle != "monthly" and anchor is None:
+            anchor = date.today().month  # 没指定就以建单当月为锚点
         cur = conn.execute(
             """INSERT INTO recurring_bills
-               (name, amount, day_of_month, category, account_id, note, is_active, created_at)
-               VALUES (?, ?, ?, ?, ?, ?, 1, ?)""",
+               (name, amount, day_of_month, category, account_id, note, is_active,
+                created_at, cycle, anchor_month)
+               VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)""",
             (name, body.amount, body.day_of_month, body.category,
-             body.account_id, body.note.strip(), datetime.now().isoformat()),
+             body.account_id, body.note.strip(), datetime.now().isoformat(),
+             body.cycle, anchor),
         )
-        return {"bill_id": cur.lastrowid, "calendar": get_financial_calendar(conn)}
+        return {
+            "bill_id": cur.lastrowid,
+            "calendar": get_financial_calendar(conn),
+            "subscriptions": get_subscription_overview(conn),
+        }
 
 
 @router.delete("/api/bills/{bill_id}")
