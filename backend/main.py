@@ -30,6 +30,7 @@ from backend.api import capture as capture_api
 from backend.api import fitness as fitness_api
 from backend.api import goals as goals_api
 from backend.api import inbox as inbox_api
+from backend.api import insights as insights_api
 from backend.api import ledger as ledger_api
 from backend.api import nutrition as nutrition_api
 from backend.api import platform as platform_api
@@ -39,6 +40,7 @@ from backend.api import reflection as reflection_api
 from backend.api import rhythm as rhythm_api
 from backend.api import statements as statements_api
 from backend.api import study as study_api
+from backend.api import tags as tags_api
 from backend.api import training as training_api
 from backend.api import views as views_api
 from backend.core import registry
@@ -97,6 +99,8 @@ app.include_router(views_api.router)
 app.include_router(capture_api.router)
 app.include_router(quick_api.router)
 app.include_router(inbox_api.router)
+app.include_router(tags_api.router)
+app.include_router(insights_api.router)
 app.include_router(statements_api.router)
 
 

@@ -25,6 +25,7 @@ from backend.modules import (
     reflection,
     rhythm,
     study,
+    tags,
 )
 
 MODULES = (
@@ -38,6 +39,7 @@ MODULES = (
     reflection.MODULE,
     goals.MODULE,
     inbox.MODULE,
+    tags.MODULE,
     # capture 的 pending_captures 外键指向 transactions，必须排在 ledger 之后
     capture.MODULE,
 )
