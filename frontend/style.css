@@ -1382,6 +1382,24 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
 .today-list-item small { color: var(--text-4); font-size: 9.5px; }
 .today-list-item em { color: var(--gold-bloom); font-family: var(--ff-mono); font-size: 11px; font-style: normal; white-space: nowrap; }
 .today-empty { padding: 12px 0; color: var(--text-4); font-size: 10.5px; }
+
+/* 待确认捕获：视觉上刻意区别于交易列表，提醒它们还不是事实 */
+.capture-panel header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.capture-count { padding: 3px 9px; border-radius: 999px; font-size: 10px; white-space: nowrap;
+                 color: var(--gold-bloom); background: rgba(255,209,102,.1); border: 1px solid rgba(255,209,102,.22); }
+.capture-item { padding: 10px 0; border-bottom: 1px dashed var(--line-1); }
+.capture-item:last-child { border-bottom: 0; }
+.capture-item__main { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; }
+.capture-item__main strong { font-size: 15px; color: var(--text-1); }
+.capture-item__main span { color: var(--text-2); font-size: 11px; }
+.capture-item__main small { width: 100%; color: var(--text-4); font-size: 10px; }
+.capture-item__actions { display: flex; gap: 6px; margin-top: 8px; }
+.capture-item__actions select { flex: 1; min-width: 0; height: 30px; padding: 0 8px; border: 1px solid var(--line-1);
+                                border-radius: 7px; background: rgba(255,255,255,.03); color: var(--text-1); font-size: 11px; }
+.capture-item__actions button { padding: 0 12px; height: 30px; border-radius: 7px; font-size: 11px;
+                                border: 1px solid rgba(255,209,102,.22); color: var(--gold-bloom); background: rgba(255,209,102,.08); }
+.capture-item__actions button.ghost { border-color: var(--line-1); color: var(--text-3); background: transparent; }
+.capture-note { margin-top: 10px; color: var(--text-4); font-size: 10px; line-height: 1.6; }
 .today-semester-card strong { display: block; margin-bottom: 5px; color: var(--text-1); font-size: 14px; }
 .today-semester-card p { margin: 0 0 10px; color: var(--text-3); font-size: 10.5px; }
 .today-semester-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }

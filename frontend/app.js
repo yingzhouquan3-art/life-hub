@@ -137,6 +137,8 @@
       return response.json();
     },
     delTx:    (id) => fetch(`${API}/transactions/${id}`, { method: 'DELETE' }).then(r => r.json()),
+    confirmCapture: (id, body) => post(`${API}/capture/${id}/confirm`, body),
+    dismissCapture: (id) => post(`${API}/capture/${id}/dismiss`, {}),
     delWorkout: async (id) => {
       const response = await fetch(`${API}/fitness/sessions/${id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error(`${response.status} ${await response.text()}`);
@@ -216,6 +218,7 @@
     reflection: { date: '', selected: null, weekly: {}, recent: [] },
     lifeCalendar: { month: '', selected_date: '', days: [], summary: {}, selected: {} },
     goals: { goals: [], summary: {} },
+    capture: { pending: [], summary: {}, channel_labels: {} },
     lifeSearch: { query: '', results: [], summary: { total: 0 }, truncated: false },
     quickPreview: null,
     annualReport: null,
@@ -454,6 +457,9 @@
     todayNextAllowance: $('#today-next-allowance'),
     todayNextBalance: $('#today-next-balance'),
     todayReminders: $('#today-reminders'),
+    captureList: $('#capture-list'),
+    captureCount: $('#capture-count'),
+    captureHealth: $('#capture-health'),
     todayGoals: $('#today-goals'),
     todaySemester: $('#today-semester'),
     quickEntryInput: $('#quick-entry-input'),
@@ -958,6 +964,86 @@
     els.transferList.querySelectorAll('[data-transfer-delete]').forEach(button => {
       button.addEventListener('click', () => onDeleteTransfer(Number(button.dataset.transferDelete)));
     });
+  }
+
+  // ---------- 待确认捕获 ----------
+  // 这里显示的都还不是交易：确认之前它们不进入余额、月度和预算的任何一项。
+  function renderCapture() {
+    const capture = state.capture || {};
+    const pending = capture.pending || [];
+    const summary = capture.summary || {};
+
+    els.captureCount.hidden = !pending.length;
+    els.captureCount.textContent = pending.length ? `${pending.length} 条待确认` : '';
+
+    if (!pending.length) {
+      els.captureList.innerHTML =
+        '<div class="today-empty">没有待确认的捕获。<br>这只说明捕获通道当前没有抓到事件，不代表没有消费。</div>';
+    } else {
+      els.captureList.innerHTML = pending.map(item => `
+        <div class="capture-item" data-capture="${item.id}">
+          <div class="capture-item__main">
+            <strong>${fmtCNY(item.amount)}</strong>
+            <span>${escapeHtml(item.merchant || item.raw_text)}</span>
+            <small>${escapeHtml((item.channel_labels || []).join(' + '))} · ${escapeHtml(item.occurred_on)}</small>
+          </div>
+          <div class="capture-item__actions">
+            <select data-capture-category="${item.id}" aria-label="支出分类">
+              <option value="food">餐饮</option><option value="transport">交通</option>
+              <option value="study">学习</option><option value="housing">居住</option>
+              <option value="medical">医疗</option><option value="entertainment">娱乐</option>
+              <option value="social">社交</option><option value="digital">数字服务</option>
+              <option value="other" selected>其他</option>
+            </select>
+            <button data-capture-confirm="${item.id}">确认记账</button>
+            <button class="ghost" data-capture-dismiss="${item.id}">忽略</button>
+          </div>
+        </div>`).join('');
+
+      els.captureList.querySelectorAll('[data-capture-confirm]').forEach(button => {
+        button.addEventListener('click', () => onConfirmCapture(Number(button.dataset.captureConfirm)));
+      });
+      els.captureList.querySelectorAll('[data-capture-dismiss]').forEach(button => {
+        button.addEventListener('click', () => onDismissCapture(Number(button.dataset.captureDismiss)));
+      });
+    }
+
+    // 通道健康度：静默失败是通知监听最大的坑，必须在界面上看得见。
+    if (!summary.last_capture_at) {
+      els.captureHealth.textContent = '还没有收到过任何捕获事件。手机端配置好之后这里会开始有数据。';
+    } else {
+      const days = Math.floor((Date.now() - new Date(summary.last_capture_at).getTime()) / 86400000);
+      const label = capture.channel_labels?.[summary.last_capture_channel] || summary.last_capture_channel;
+      els.captureHealth.textContent = days >= 3
+        ? `最近一次捕获是 ${days} 天前（${label}）。间隔这么久，建议检查手机上的监听是不是被系统关掉了。`
+        : `最近一次捕获：${label} · ${days === 0 ? '今天' : `${days} 天前`}`;
+    }
+  }
+
+  async function onConfirmCapture(id) {
+    if (state.busy) return;
+    const select = els.captureList.querySelector(`[data-capture-category="${id}"]`);
+    state.busy = true;
+    try {
+      const response = await api.confirmCapture(id, { category: select ? select.value : 'other' });
+      state.capture = response.capture_state;
+      state.stats = response.stats;
+      state.today = response.today;
+      renderCapture();
+      renderStats();
+      renderToday();
+      renderProgress();
+    } finally { state.busy = false; }
+  }
+
+  async function onDismissCapture(id) {
+    if (state.busy || !window.confirm('忽略这条捕获？它不会变成交易，但这笔钱可能确实花了。')) return;
+    state.busy = true;
+    try {
+      const response = await api.dismissCapture(id);
+      state.capture = response.capture_state;
+      renderCapture();
+    } finally { state.busy = false; }
   }
 
   function renderToday() {
@@ -1850,6 +1936,7 @@
     renderLifeOverview();
     renderLifeCalendar();
     renderGoals();
+    renderCapture();
     renderLifeSearch();
     renderFitness();
     renderNutrition();
@@ -1897,6 +1984,7 @@
     state.reflection = data.reflection || { date: '', selected: null, weekly: {}, recent: [] };
     state.lifeCalendar = lifeCalendar || { month: '', selected_date: '', days: [], summary: {}, selected: {} };
     state.goals = data.goals || { goals: [], summary: {} };
+    state.capture = data.capture || { pending: [], summary: {}, channel_labels: {} };
     state.importBatches = data.import_batches || [];
     state.calendar = data.calendar || { bills: [], summary: {}, review: {} };
     state.annualReport = annual;

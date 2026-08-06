@@ -18,6 +18,7 @@ from backend.core.config import SNAPSHOT_VERSION
 from backend.core.db import current_path as current_db_path
 from backend.core.db import db
 from backend.modules import DELETE_ORDER, OPTIONAL_SNAPSHOT_TABLES, SNAPSHOT_COLUMNS
+from backend.modules.capture import get_capture_state
 from backend.modules.fitness import get_fitness_state
 from backend.modules.goals import get_life_goals_state
 from backend.modules.ledger import (
@@ -108,6 +109,7 @@ def get_state():
             "rhythm": get_rhythm_state(conn),
             "reflection": get_reflection_state(conn),
             "goals": get_life_goals_state(conn),
+            "capture": get_capture_state(conn),
             "import_batches": get_import_batches(conn),
             "calendar": get_financial_calendar(conn),
             "transfers": get_recent_transfers(conn),
