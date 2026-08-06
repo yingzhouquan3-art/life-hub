@@ -139,6 +139,31 @@
     },
     delTx:    (id) => fetch(`${API}/transactions/${id}`, { method: 'DELETE' }).then(r => r.json()),
     previewStatement: (body) => post(`${API}/statements/preview`, body),
+    bodyState: () => fetch(`${API}/body`).then(r => r.json()),
+    saveBody: (body) => post(`${API}/body/measurements`, body),
+    delBody: async (id) => {
+      const response = await fetch(`${API}/body/measurements/${id}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error(`${response.status} ${await response.text()}`);
+      return response.json();
+    },
+    trainingState: () => fetch(`${API}/training`).then(r => r.json()),
+    addExercise: (body) => post(`${API}/training/exercises`, body),
+    addSet: (body) => post(`${API}/training/sets`, body),
+    delSet: async (id) => {
+      const response = await fetch(`${API}/training/sets/${id}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error(`${response.status} ${await response.text()}`);
+      return response.json();
+    },
+    inboxState: () => fetch(`${API}/inbox`).then(r => r.json()),
+    addInbox: (body) => post(`${API}/inbox`, body),
+    fileInbox: (id, body) => post(`${API}/inbox/${id}/file`, body),
+    dropInbox: (id) => post(`${API}/inbox/${id}/drop`, {}),
+    insights: (days) => fetch(`${API}/insights?days=${days}`).then(r => r.json()),
+    dataHealth: () => fetch(`${API}/insights/health`).then(r => r.json()),
+    tagOverview: () => fetch(`${API}/tags/overview`).then(r => r.json()),
+    cleanupTags: () => post(`${API}/tags/cleanup`, {}),
+    previewHealth: (body) => post(`${API}/health-import/preview`, body),
+    commitHealth: (body) => post(`${API}/health-import/commit`, body),
     confirmCapture: (id, body) => post(`${API}/capture/${id}/confirm`, body),
     dismissCapture: (id) => post(`${API}/capture/${id}/dismiss`, {}),
     delWorkout: async (id) => {
@@ -222,6 +247,13 @@
     lifeCalendar: { month: '', selected_date: '', days: [], summary: {}, selected: {} },
     goals: { goals: [], summary: {} },
     capture: { pending: [], summary: {}, channel_labels: {} },
+    body: { latest: null, changes: {}, recent: [], girth_labels: {} },
+    training: { exercises: [], recent_sessions: [], week: {}, records: [] },
+    inbox: { items: [], summary: {}, targets: {} },
+    insights: null,
+    dataHealth: null,
+    tagOverview: null,
+    healthImportPreview: null,
     lifeSearch: { query: '', results: [], summary: { total: 0 }, truncated: false },
     quickPreview: null,
     annualReport: null,
@@ -460,6 +492,56 @@
     todayNextAllowance: $('#today-next-allowance'),
     todayNextBalance: $('#today-next-balance'),
     todayReminders: $('#today-reminders'),
+    bodyWeight: $('#body-weight'),
+    bodyWeightDelta: $('#body-weight-delta'),
+    bodyWaist: $('#body-waist'),
+    bodyWaistDelta: $('#body-waist-delta'),
+    bodyDays: $('#body-days'),
+    bodyCount: $('#body-count'),
+    bodyDate: $('#body-date'),
+    bodyWeightInput: $('#body-weight-input'),
+    bodyFatInput: $('#body-fat-input'),
+    bodyWaistInput: $('#body-waist-input'),
+    bodyChestInput: $('#body-chest-input'),
+    bodyArmInput: $('#body-arm-input'),
+    bodyNoteInput: $('#body-note-input'),
+    btnSaveBody: $('#btn-save-body'),
+    bodyStatus: $('#body-status'),
+    bodyList: $('#body-list'),
+    healthFile: $('#health-file'),
+    healthKind: $('#health-kind'),
+    btnAnalyzeHealth: $('#btn-analyze-health'),
+    healthSummary: $('#health-summary'),
+    healthPreview: $('#health-preview'),
+    btnCommitHealth: $('#btn-commit-health'),
+    healthError: $('#health-error'),
+    setSession: $('#set-session'),
+    setExercise: $('#set-exercise'),
+    setReps: $('#set-reps'),
+    setWeight: $('#set-weight'),
+    setDistance: $('#set-distance'),
+    setDuration: $('#set-duration'),
+    btnAddSet: $('#btn-add-set'),
+    setStatus: $('#set-status'),
+    exerciseName: $('#exercise-name'),
+    exerciseKind: $('#exercise-kind'),
+    btnAddExercise: $('#btn-add-exercise'),
+    trainingList: $('#training-list'),
+    trainingWeekVolume: $('#training-week-volume'),
+    recordsList: $('#records-list'),
+    inboxOpen: $('#inbox-open'),
+    inboxFiled: $('#inbox-filed'),
+    inboxOldest: $('#inbox-oldest'),
+    inboxInput: $('#inbox-input'),
+    btnAddInbox: $('#btn-add-inbox'),
+    inboxStatus: $('#inbox-status'),
+    inboxList: $('#inbox-list'),
+    insightsDays: $('#insights-days'),
+    insightsNote: $('#insights-note'),
+    insightsList: $('#insights-list'),
+    healthMetricList: $('#health-list'),
+    tagsList: $('#tags-list'),
+    btnCleanupTags: $('#btn-cleanup-tags'),
     captureList: $('#capture-list'),
     captureCount: $('#capture-count'),
     captureHealth: $('#capture-health'),
@@ -1057,6 +1139,349 @@
       state.capture = response.capture_state;
       renderCapture();
     } finally { state.busy = false; }
+  }
+
+  // ---------- 身体指标 ----------
+  // 留空的指标是「没量」，不是 0；变化量只描述差值，不解释原因。
+  function renderBody() {
+    const state_ = state.body || {};
+    const changes = state_.changes || {};
+    const describe = (key, unit) => {
+      const change = changes[key];
+      if (!change) return { value: '—', hint: '还没有记录' };
+      const delta = change.delta;
+      const hint = delta == null
+        ? `第一次记录 · ${change.measured_on}`
+        : `${delta > 0 ? '+' : ''}${delta}${unit} · 距上次 ${change.days_between} 天`;
+      return { value: `${change.value}${unit}`, hint };
+    };
+    const weight = describe('weight_kg', 'kg');
+    const waist = describe('waist_cm', 'cm');
+    els.bodyWeight.textContent = weight.value;
+    els.bodyWeightDelta.textContent = weight.hint;
+    els.bodyWaist.textContent = waist.value;
+    els.bodyWaistDelta.textContent = waist.hint;
+    els.bodyDays.textContent = state_.days_since_last == null ? '—' : `${state_.days_since_last} 天`;
+    els.bodyCount.textContent = `共 ${fmtInt(state_.measured_count || 0)} 条记录`;
+
+    const rows = state_.recent || [];
+    els.bodyList.innerHTML = rows.length ? rows.map(row => {
+      const parts = [];
+      if (row.weight_kg != null) parts.push(`${row.weight_kg}kg`);
+      if (row.body_fat_pct != null) parts.push(`体脂 ${row.body_fat_pct}%`);
+      Object.entries(state_.girth_labels || {}).forEach(([key, label]) => {
+        if (row[key] != null) parts.push(`${label} ${row[key]}cm`);
+      });
+      return `<div class="tracker-item">
+        <div><strong>${escapeHtml(row.occurred_on)}</strong><small>${escapeHtml(parts.join(' · ') || '只写了备注')}</small></div>
+        <button data-body-delete="${row.id}">删除</button>
+      </div>`;
+    }).join('') : '<div class="today-empty">还没有身体指标记录。</div>';
+    els.bodyList.querySelectorAll('[data-body-delete]').forEach(button => {
+      button.addEventListener('click', () => onDeleteBody(Number(button.dataset.bodyDelete)));
+    });
+  }
+
+  async function onSaveBody() {
+    if (state.busy) return;
+    const payload = {
+      occurred_on: els.bodyDate.value || todayISO(),
+      weight_kg: numberOrNull(els.bodyWeightInput.value),
+      body_fat_pct: numberOrNull(els.bodyFatInput.value),
+      waist_cm: numberOrNull(els.bodyWaistInput.value),
+      chest_cm: numberOrNull(els.bodyChestInput.value),
+      arm_cm: numberOrNull(els.bodyArmInput.value),
+      note: els.bodyNoteInput.value.trim(),
+    };
+    state.busy = true;
+    els.bodyStatus.hidden = true;
+    try {
+      const response = await api.saveBody(payload);
+      state.body = response.body;
+      [els.bodyWeightInput, els.bodyFatInput, els.bodyWaistInput,
+       els.bodyChestInput, els.bodyArmInput, els.bodyNoteInput].forEach(input => { input.value = ''; });
+      renderBody();
+    } catch (error) {
+      els.bodyStatus.textContent = cleanError(error, '保存失败');
+      els.bodyStatus.hidden = false;
+    } finally { state.busy = false; }
+  }
+
+  async function onDeleteBody(id) {
+    if (state.busy || !window.confirm('删除这一天的身体指标？')) return;
+    state.busy = true;
+    try {
+      state.body = (await api.delBody(id)).body;
+      renderBody();
+    } finally { state.busy = false; }
+  }
+
+  // ---------- 训练记录 ----------
+  function renderTraining() {
+    const training = state.training || {};
+    const sessions = training.recent_sessions || [];
+    els.trainingWeekVolume.textContent = fmtInt(training.week?.volume || 0);
+
+    els.setSession.innerHTML = sessions.length
+      ? sessions.map(item => `<option value="${item.id}">${escapeHtml(item.occurred_on)} · ${fmtInt(item.duration_minutes)} 分钟</option>`).join('')
+      : '<option value="">先在上面记一次健身</option>';
+    els.setExercise.innerHTML = (training.exercises || [])
+      .map(item => `<option value="${item.id}">${escapeHtml(item.name)}</option>`).join('');
+
+    els.trainingList.innerHTML = sessions.length ? sessions.map(session => {
+      const sets = (session.sets || []).map(set => {
+        const parts = [];
+        if (set.reps != null && set.weight_kg != null) parts.push(`${set.reps} × ${set.weight_kg}kg`);
+        else if (set.reps != null) parts.push(`${set.reps} 次`);
+        if (set.distance_km != null) parts.push(`${set.distance_km}km`);
+        if (set.duration_seconds != null) parts.push(`${Math.round(set.duration_seconds / 60)} 分钟`);
+        return `<div class="set-row">
+          <span>${set.set_number}. ${escapeHtml(set.exercise_name)}</span>
+          <em>${escapeHtml(parts.join(' · '))}</em>
+          <button data-set-delete="${set.id}">×</button>
+        </div>`;
+      }).join('');
+      return `<div class="training-session">
+        <div class="training-session__head">
+          <strong>${escapeHtml(session.occurred_on)}</strong>
+          <span>${fmtInt(session.duration_minutes)} 分钟 · 容量 ${fmtInt(session.volume)}kg</span>
+        </div>
+        ${sets || '<div class="today-empty">这次训练还没有记录具体组数。</div>'}
+      </div>`;
+    }).join('') : '<div class="today-empty">还没有训练记录。</div>';
+
+    els.trainingList.querySelectorAll('[data-set-delete]').forEach(button => {
+      button.addEventListener('click', () => onDeleteSet(Number(button.dataset.setDelete)));
+    });
+
+    const records = training.records || [];
+    els.recordsList.innerHTML = records.length ? records.map(record => {
+      const bits = [];
+      if (record.heaviest) bits.push(`最重 ${record.heaviest.weight_kg}kg × ${record.heaviest.reps}`);
+      if (record.most_reps) bits.push(`最多 ${record.most_reps.reps} 次`);
+      if (record.farthest) bits.push(`最远 ${record.farthest.distance_km}km`);
+      if (record.estimated_one_rep_max) bits.push(`估算 1RM ${record.estimated_one_rep_max.value}kg`);
+      return `<div class="record-row">
+        <strong>${escapeHtml(record.exercise.name)}</strong>
+        <span>${escapeHtml(bits.join(' · ') || '还没有可比较的组')}</span>
+        <small>${fmtInt(record.set_count)} 组</small>
+      </div>`;
+    }).join('') : '<div class="today-empty">记下组数之后这里会出现个人纪录。</div>';
+  }
+
+  async function onAddSet() {
+    if (state.busy) return;
+    const sessionId = Number(els.setSession.value);
+    if (!sessionId) { els.setStatus.textContent = '先在上面记一次健身，再往里加组'; els.setStatus.hidden = false; return; }
+    const durationMinutes = numberOrNull(els.setDuration.value);
+    state.busy = true;
+    els.setStatus.hidden = true;
+    try {
+      const response = await api.addSet({
+        session_id: sessionId,
+        exercise_id: Number(els.setExercise.value),
+        reps: numberOrNull(els.setReps.value),
+        weight_kg: numberOrNull(els.setWeight.value),
+        distance_km: numberOrNull(els.setDistance.value),
+        duration_seconds: durationMinutes == null ? null : Math.round(durationMinutes * 60),
+      });
+      state.training = response.training;
+      [els.setReps, els.setWeight, els.setDistance, els.setDuration].forEach(input => { input.value = ''; });
+      renderTraining();
+    } catch (error) {
+      els.setStatus.textContent = cleanError(error, '这一组没能记下');
+      els.setStatus.hidden = false;
+    } finally { state.busy = false; }
+  }
+
+  async function onDeleteSet(id) {
+    if (state.busy) return;
+    state.busy = true;
+    try {
+      state.training = (await api.delSet(id)).training;
+      renderTraining();
+    } finally { state.busy = false; }
+  }
+
+  async function onAddExercise() {
+    if (state.busy) return;
+    const name = els.exerciseName.value.trim();
+    if (!name) { els.exerciseName.focus(); return; }
+    state.busy = true;
+    els.setStatus.hidden = true;
+    try {
+      const response = await api.addExercise({ name, kind: els.exerciseKind.value });
+      state.training = response.training;
+      els.exerciseName.value = '';
+      renderTraining();
+    } catch (error) {
+      els.setStatus.textContent = cleanError(error, '动作没能加入');
+      els.setStatus.hidden = false;
+    } finally { state.busy = false; }
+  }
+
+  // ---------- 收集箱 ----------
+  function renderInbox() {
+    const inbox = state.inbox || {};
+    const summary = inbox.summary || {};
+    els.inboxOpen.textContent = fmtInt(summary.open || 0);
+    els.inboxFiled.textContent = fmtInt(summary.filed || 0);
+    els.inboxOldest.textContent = summary.oldest_open_days == null ? '—' : `${summary.oldest_open_days} 天`;
+
+    const targets = inbox.targets || {};
+    const items = inbox.items || [];
+    els.inboxList.innerHTML = items.length ? items.map(item => `
+      <div class="inbox-item">
+        <div class="inbox-item__text">${escapeHtml(item.content)}</div>
+        <div class="inbox-item__actions">
+          <select data-inbox-target="${item.id}" aria-label="归档到">
+            ${Object.entries(targets).map(([key, label]) => `<option value="${key}">${escapeHtml(label)}</option>`).join('')}
+          </select>
+          <button data-inbox-file="${item.id}">归档</button>
+          <button class="ghost" data-inbox-drop="${item.id}">丢弃</button>
+        </div>
+      </div>`).join('') : '<div class="today-empty">收集箱是空的。</div>';
+
+    els.inboxList.querySelectorAll('[data-inbox-file]').forEach(button => {
+      button.addEventListener('click', () => onFileInbox(Number(button.dataset.inboxFile)));
+    });
+    els.inboxList.querySelectorAll('[data-inbox-drop]').forEach(button => {
+      button.addEventListener('click', () => onDropInbox(Number(button.dataset.inboxDrop)));
+    });
+  }
+
+  async function onAddInbox() {
+    if (state.busy) return;
+    const content = els.inboxInput.value.trim();
+    if (!content) { els.inboxInput.focus(); return; }
+    state.busy = true;
+    els.inboxStatus.hidden = true;
+    try {
+      state.inbox = (await api.addInbox({ content })).inbox;
+      els.inboxInput.value = '';
+      renderInbox();
+    } catch (error) {
+      els.inboxStatus.textContent = cleanError(error, '没能放进收集箱');
+      els.inboxStatus.hidden = false;
+    } finally { state.busy = false; }
+  }
+
+  async function onFileInbox(id) {
+    if (state.busy) return;
+    const select = els.inboxList.querySelector(`[data-inbox-target="${id}"]`);
+    state.busy = true;
+    try {
+      state.inbox = (await api.fileInbox(id, { target_module: select.value })).inbox;
+      renderInbox();
+    } finally { state.busy = false; }
+  }
+
+  async function onDropInbox(id) {
+    if (state.busy || !window.confirm('丢弃这条？这不代表这件事没发生过，只是不进任何模块。')) return;
+    state.busy = true;
+    try {
+      state.inbox = (await api.dropInbox(id)).inbox;
+      renderInbox();
+    } finally { state.busy = false; }
+  }
+
+  // ---------- 洞察 ----------
+  // 这里全部是同期变化，措辞上绝不出现因果。
+  function renderInsights() {
+    const insights = state.insights;
+    if (insights) {
+      els.insightsNote.textContent = insights.note;
+      els.insightsList.innerHTML = insights.comparisons.map(item => {
+        const hasNumber = item.correlation != null;
+        const strength = hasNumber ? Math.abs(item.correlation) : 0;
+        const label = !hasNumber ? '暂不给数字'
+          : `${item.direction} · 相关系数 ${item.correlation}`;
+        return `<div class="insight-row${hasNumber ? '' : ' is-muted'}">
+          <div class="insight-row__pair">
+            <strong>${escapeHtml(item.metric_a.label)}</strong>
+            <span>与</span>
+            <strong>${escapeHtml(item.metric_b.label)}</strong>
+          </div>
+          <div class="insight-row__value">${escapeHtml(label)}</div>
+          <div class="insight-bar"><i style="width:${Math.round(strength * 100)}%"></i></div>
+          <small>${escapeHtml(item.reason || `配对 ${item.paired_days} 天`)}</small>
+        </div>`;
+      }).join('');
+    }
+
+    const health = state.dataHealth;
+    if (health) {
+      els.healthMetricList.innerHTML = health.metrics.map(item => `
+        <div class="stat">
+          <span class="muted">${escapeHtml(item.label)}</span>
+          <span>${item.days_since == null ? '从未记录' : `${item.days_since} 天前 · 近 ${item.window} 天记了 ${item.days_recorded} 天`}</span>
+        </div>`).join('');
+    }
+
+    const tags = state.tagOverview;
+    if (tags) {
+      els.tagsList.innerHTML = tags.tags.length ? tags.tags.map(tag => `
+        <div class="tag-row">
+          <strong>#${escapeHtml(tag.name)}</strong>
+          <span>${fmtInt(tag.total)} 条 · ${escapeHtml(tag.modules.map(key => tags.modules[key] || key).join('、')) || '无'}</span>
+          ${tag.dead_links ? `<em class="tag-dead">${tag.dead_links} 条失效</em>` : ''}
+        </div>`).join('') : '<div class="today-empty">还没有标签。标签可以横跨多个模块，用来把一件事的所有痕迹串起来。</div>';
+    }
+  }
+
+  async function reloadInsights() {
+    const days = Number(els.insightsDays.value) || 90;
+    const [insights, health, tags] = await Promise.all([
+      api.insights(days), api.dataHealth(), api.tagOverview(),
+    ]);
+    state.insights = insights;
+    state.dataHealth = health;
+    state.tagOverview = tags;
+    renderInsights();
+  }
+
+  // ---------- 运动数据导入 ----------
+  function renderHealthImport() {
+    const preview = state.healthImportPreview;
+    if (!preview) {
+      els.healthSummary.hidden = true;
+      els.healthPreview.innerHTML = '';
+      els.btnCommitHealth.disabled = true;
+      els.btnCommitHealth.textContent = '确认写入 0 条';
+      return;
+    }
+    const parsed = preview.summary || {};
+    const recon = preview.reconciliation?.summary || {};
+    els.healthSummary.hidden = false;
+    els.healthSummary.innerHTML = `<div class="statement-stats">
+      <span><em>${escapeHtml(preview.kind_label || '')}</em>${parsed.date_from ? ` ${escapeHtml(parsed.date_from)} 至 ${escapeHtml(parsed.date_to)}` : ''}</span>
+      <span>解析 <strong>${fmtInt(parsed.parsed || 0)}</strong> 条</span>
+      <span>已经记过 <strong>${fmtInt(recon.matched || 0)}</strong> 条</span>
+      <span class="is-new">还没记 <strong>${fmtInt(recon.new || 0)}</strong> 条</span>
+      ${parsed.skipped ? `<span class="is-skip">跳过 <strong>${fmtInt(parsed.skipped)}</strong> 条</span>` : ''}
+    </div>`;
+
+    const rows = preview.reconciliation?.new || [];
+    els.healthPreview.innerHTML = rows.length
+      ? rows.map(row => `<div class="statement-row">
+          <span>${escapeHtml(row.occurred_on)}</span>
+          <span class="statement-row__note">${escapeHtml(row.note || (row.weight_kg != null ? `${row.weight_kg}kg` : '身体指标'))}</span>
+          <em>${row.duration_minutes ? `${row.duration_minutes} 分钟` : ''}</em>
+        </div>`).join('')
+      : '<div class="today-empty">这份文件里的每一条都已经记过了。</div>';
+    els.btnCommitHealth.disabled = rows.length === 0;
+    els.btnCommitHealth.textContent = `确认写入 ${fmtInt(rows.length)} 条`;
+  }
+
+  function numberOrNull(value) {
+    const text = String(value ?? '').trim();
+    if (!text) return null;
+    const parsed = Number(text);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  function cleanError(error, fallback) {
+    return String(error?.message || fallback).replace(/^\d+\s*/, '');
   }
 
   function renderToday() {
@@ -2002,6 +2427,11 @@
     renderLifeCalendar();
     renderGoals();
     renderCapture();
+    renderBody();
+    renderTraining();
+    renderInbox();
+    renderInsights();
+    renderHealthImport();
     renderLifeSearch();
     renderFitness();
     renderNutrition();
@@ -2051,6 +2481,12 @@
     state.lifeCalendar = lifeCalendar || { month: '', selected_date: '', days: [], summary: {}, selected: {} };
     state.goals = data.goals || { goals: [], summary: {} };
     state.capture = data.capture || { pending: [], summary: {}, channel_labels: {} };
+    const [bodyState, trainingState, inboxState] = await Promise.all([
+      api.bodyState(), api.trainingState(), api.inboxState(),
+    ]);
+    state.body = bodyState;
+    state.training = trainingState;
+    state.inbox = inboxState;
     state.importBatches = data.import_batches || [];
     state.calendar = data.calendar || { bills: [], summary: {}, review: {} };
     state.annualReport = annual;
@@ -2159,7 +2595,10 @@
   }
 
   function switchModule(module) {
-    if (!['overview', 'calendar', 'goals', 'finance', 'fitness', 'nutrition', 'recovery', 'study', 'rhythm', 'reflection'].includes(module)) return;
+    // 白名单要和 index.html 里的 data-module-panel 一一对应，漏一个那个导航就点不动
+    const MODULES = ['overview', 'calendar', 'goals', 'finance', 'fitness', 'body',
+                     'nutrition', 'recovery', 'study', 'rhythm', 'reflection', 'inbox', 'insights'];
+    if (!MODULES.includes(module)) return;
     state.currentModule = module;
     els.modulePanels.forEach(panel => { panel.hidden = panel.dataset.modulePanel !== module; });
     els.moduleNav.forEach(button => {
@@ -2168,6 +2607,9 @@
       if (active) button.setAttribute('aria-current', 'page');
       else button.removeAttribute('aria-current');
     });
+    if (module === 'insights' && !state.insights) {
+      reloadInsights().catch(() => { /* 面板里会显示空态，不打断切换 */ });
+    }
     if (module === 'finance') {
       requestAnimationFrame(() => {
         grid.resize();
@@ -2315,6 +2757,9 @@
       });
       state.fitness = response.fitness;
       state.life = response.life;
+      // 新记的这次训练要立刻能在「记一组」里选到，否则得刷新页面才行
+      state.training = await api.trainingState();
+      renderTraining();
       els.fitnessDuration.value = '';
       els.fitnessNote.value = '';
       els.fitnessStatus.textContent = '已保存，这次活动已经进入你的生活轨迹。';
@@ -2503,6 +2948,8 @@
     try {
       const response = await api.delWorkout(id);
       state.fitness = response.fitness;
+      state.training = await api.trainingState();
+      renderTraining();
       state.life = response.life;
       renderFitness(); renderLifeOverview();
     } finally { state.busy = false; }
@@ -3514,6 +3961,63 @@
       els.btnQuickParse.disabled = false;
     }
   }
+
+  els.btnSaveBody.addEventListener('click', onSaveBody);
+  els.btnAddSet.addEventListener('click', onAddSet);
+  els.btnAddExercise.addEventListener('click', onAddExercise);
+  els.btnAddInbox.addEventListener('click', onAddInbox);
+  els.inboxInput.addEventListener('keydown', event => {
+    if (event.key === 'Enter') { event.preventDefault(); onAddInbox(); }
+  });
+  els.insightsDays.addEventListener('change', () => { reloadInsights(); });
+  els.btnCleanupTags.addEventListener('click', async () => {
+    if (state.busy) return;
+    if (!window.confirm('清掉指向已删除记录的失效链接？来源记录不受影响。')) return;
+    state.busy = true;
+    try { await api.cleanupTags(); await reloadInsights(); } finally { state.busy = false; }
+  });
+
+  els.btnAnalyzeHealth.addEventListener('click', async () => {
+    const file = els.healthFile.files?.[0];
+    els.healthError.hidden = true;
+    if (!file) { els.healthFile.click(); return; }
+    els.btnAnalyzeHealth.disabled = true;
+    try {
+      const text = await readStatementFile(file);
+      state.healthImportPreview = await api.previewHealth({
+        content: text, kind: els.healthKind.value, filename: file.name,
+      });
+      renderHealthImport();
+    } catch (error) {
+      state.healthImportPreview = null;
+      renderHealthImport();
+      els.healthError.textContent = cleanError(error, '文件无法解析');
+      els.healthError.hidden = false;
+    } finally { els.btnAnalyzeHealth.disabled = false; }
+  });
+
+  els.btnCommitHealth.addEventListener('click', async () => {
+    const preview = state.healthImportPreview;
+    const rows = preview?.reconciliation?.new || [];
+    if (state.busy || !rows.length) return;
+    state.busy = true;
+    els.btnCommitHealth.disabled = true;
+    els.healthError.hidden = true;
+    try {
+      const response = await api.commitHealth({ kind: preview.kind, rows });
+      state.healthImportPreview = null;
+      els.healthFile.value = '';
+      await loadAndPaint();
+      els.healthSummary.hidden = false;
+      els.healthSummary.textContent = response.failed.length
+        ? `写入 ${response.imported} 条，${response.failed.length} 条没能写入。${response.note}`
+        : `已写入 ${response.imported} 条。${response.note}`;
+    } catch (error) {
+      els.healthError.textContent = cleanError(error, '写入失败');
+      els.healthError.hidden = false;
+      els.btnCommitHealth.disabled = false;
+    } finally { state.busy = false; }
+  });
 
   els.btnQuickParse.addEventListener('click', parseQuickEntry);
   els.quickEntryInput.addEventListener('keydown', event => {

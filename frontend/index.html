@@ -26,11 +26,14 @@
       <button class="platform-nav" data-module-target="goals"><span class="platform-nav__icon">标</span><span>目标</span></button>
       <button class="platform-nav" data-module-target="finance"><span class="platform-nav__icon">¥</span><span>账本</span></button>
       <button class="platform-nav" data-module-target="fitness"><span class="platform-nav__icon">动</span><span>健身</span></button>
+      <button class="platform-nav" data-module-target="body"><span class="platform-nav__icon">秤</span><span>身体</span></button>
       <button class="platform-nav" data-module-target="nutrition"><span class="platform-nav__icon">食</span><span>饮食</span></button>
       <button class="platform-nav" data-module-target="recovery"><span class="platform-nav__icon">眠</span><span>恢复</span></button>
       <button class="platform-nav" data-module-target="study"><span class="platform-nav__icon">学</span><span>学习</span></button>
       <button class="platform-nav" data-module-target="rhythm"><span class="platform-nav__icon">律</span><span>节奏</span></button>
       <button class="platform-nav" data-module-target="reflection"><span class="platform-nav__icon">记</span><span>复盘</span></button>
+      <button class="platform-nav" data-module-target="inbox"><span class="platform-nav__icon">箱</span><span>收集</span></button>
+      <button class="platform-nav" data-module-target="insights"><span class="platform-nav__icon">析</span><span>洞察</span></button>
     </div>
     <span class="platform-rail__version">MY LIFE</span>
   </nav>
@@ -725,7 +728,43 @@
       </section>
       <section class="tracker-list-card"><header><span>最近记录</span><h2>我的身体轨迹</h2></header><div class="tracker-list" id="fitness-list"></div></section>
     </div>
-  </main>
+      <section class="training-block">
+      <header class="training-block__head">
+        <div><h2>训练记录</h2><p>一次训练由若干组构成，每组落到动作库里的一个动作</p></div>
+        <span class="training-volume">本周容量 <strong id="training-week-volume">0</strong> kg</span>
+      </header>
+      <div class="tracker-grid">
+        <section class="tracker-form-card">
+          <header><span>记一组</span><h2>刚才做了什么</h2></header>
+          <div class="tracker-form">
+            <label><span>训练</span><select id="set-session"></select></label>
+            <label><span>动作</span><select id="set-exercise"></select></label>
+            <label><span>次数</span><input id="set-reps" type="number" min="1" max="1000" placeholder="5"></label>
+            <label><span>重量（kg）</span><input id="set-weight" type="number" min="0" step="0.5" placeholder="80"></label>
+            <label><span>距离（km）</span><input id="set-distance" type="number" min="0" step="0.01" placeholder="有氧填这里"></label>
+            <label><span>用时（分钟）</span><input id="set-duration" type="number" min="1" placeholder="有氧填这里"></label>
+            <button id="btn-add-set">记下这一组</button>
+            <p class="tracker-status" id="set-status" hidden></p>
+          </div>
+          <div class="exercise-create">
+            <input id="exercise-name" type="text" maxlength="40" placeholder="动作库里没有？新增一个">
+            <select id="exercise-kind" aria-label="动作类型">
+              <option value="strength">力量</option><option value="cardio">有氧</option><option value="mobility">拉伸</option>
+            </select>
+            <button id="btn-add-exercise">加入动作库</button>
+          </div>
+        </section>
+        <section class="tracker-list-card">
+          <header><span>最近训练</span><h2>组数与容量</h2></header>
+          <div class="tracker-list" id="training-list"></div>
+        </section>
+      </div>
+      <section class="records-card">
+        <header><h2>个人纪录</h2><p>只描述已经记录过的最好一次，不代表能力上限；一段时间没刷新也不说明退步</p></header>
+        <div id="records-list"></div>
+      </section>
+    </section>
+</main>
 
   <main class="life-module tracker-module" data-module-panel="nutrition" hidden>
     <header class="life-module__head">
@@ -885,6 +924,107 @@
         </section>
       </div>
     </div>
+  </main>
+
+  <main class="life-module tracker-module" data-module-panel="body" hidden>
+    <header class="life-module__head">
+      <div><span class="life-module__eyebrow">BODY · MEASUREMENT</span><h1>身体指标</h1><p>体重是健身与饮食唯一的共同锚点。所有数值都可以留空。</p></div>
+      <button class="module-jump" data-module-jump="overview">返回生活总览 <span>→</span></button>
+    </header>
+    <section class="tracker-kpis">
+      <article><span>最近体重</span><strong id="body-weight">—</strong><small id="body-weight-delta">还没有记录</small></article>
+      <article><span>最近腰围</span><strong id="body-waist">—</strong><small id="body-waist-delta">还没有记录</small></article>
+      <article><span>距上次记录</span><strong id="body-days">—</strong><small id="body-count">共 0 条记录</small></article>
+    </section>
+    <div class="tracker-grid">
+      <section class="tracker-form-card">
+        <header><span>今天量了</span><h2>记一次身体指标</h2></header>
+        <div class="tracker-form">
+          <label><span>日期</span><input id="body-date" type="date"></label>
+          <label><span>体重（kg）</span><input id="body-weight-input" type="number" min="0" step="0.1" placeholder="可留空"></label>
+          <label><span>体脂率（%）</span><input id="body-fat-input" type="number" min="0" max="99" step="0.1" placeholder="可留空"></label>
+          <label><span>腰围（cm）</span><input id="body-waist-input" type="number" min="0" step="0.1" placeholder="可留空"></label>
+          <label><span>胸围（cm）</span><input id="body-chest-input" type="number" min="0" step="0.1" placeholder="可留空"></label>
+          <label><span>上臂围（cm）</span><input id="body-arm-input" type="number" min="0" step="0.1" placeholder="可留空"></label>
+          <label class="tracker-form__wide"><span>备注（可选）</span><input id="body-note-input" type="text" maxlength="120" placeholder="例如：晨起空腹"></label>
+          <button id="btn-save-body">保存</button>
+          <p class="tracker-status" id="body-status" hidden></p>
+        </div>
+        <p class="tracker-hint">同一天再次保存会更新那天的记录。留空代表没量，不会被当成 0。</p>
+      </section>
+      <section class="tracker-list-card">
+        <header><span>最近记录</span><h2>体重与围度</h2></header>
+        <div class="tracker-list" id="body-list"></div>
+      </section>
+    </div>
+    <section class="import-panel dashboard-panel">
+      <header><div><h2>从运动 App 导入</h2><p>华为运动健康等导出的 CSV，对账后只补没记过的</p></div></header>
+      <div class="import-controls">
+        <label class="import-file-label"><span>选择导出的 CSV</span><input id="health-file" type="file" accept=".csv,text/csv"></label>
+        <select id="health-kind" aria-label="导入类型">
+          <option value="workout">运动记录</option>
+          <option value="body">身体指标</option>
+        </select>
+        <button id="btn-analyze-health">解析并对账</button>
+      </div>
+      <div class="statement-summary" id="health-summary" hidden></div>
+      <div class="statement-preview" id="health-preview"></div>
+      <button class="import-commit" id="btn-commit-health" disabled>确认写入 0 条</button>
+      <p class="plan-status plan-status--error" id="health-error" hidden></p>
+      <p class="import-note">
+        走导出文件而不是官方接口：Health Kit 要过审核且数据绕云端，Health Connect 只有原生安卓应用能读。
+        同一份文件重复导入不会让记录翻倍。列名映射未对真实导出文件验证，第一次请先看预览。
+      </p>
+    </section>
+  </main>
+
+  <main class="life-module tracker-module" data-module-panel="inbox" hidden>
+    <header class="life-module__head">
+      <div><span class="life-module__eyebrow">CAPTURE · INBOX</span><h1>收集箱</h1><p>想到什么先扔进来，之后再决定它属于哪儿。</p></div>
+      <button class="module-jump" data-module-jump="overview">返回生活总览 <span>→</span></button>
+    </header>
+    <section class="tracker-kpis">
+      <article><span>待处理</span><strong id="inbox-open">0</strong><small>还没决定归属</small></article>
+      <article><span>已归档</span><strong id="inbox-filed">0</strong><small>标记过去向</small></article>
+      <article><span>最久的一条</span><strong id="inbox-oldest">—</strong><small>放太久说明箱子该清了</small></article>
+    </section>
+    <div class="tracker-grid">
+      <section class="tracker-form-card">
+        <header><span>随手记</span><h2>先扔进来</h2></header>
+        <div class="tracker-form">
+          <label class="tracker-form__wide"><span>内容</span><input id="inbox-input" type="text" maxlength="500" placeholder="例如：买跑鞋 / 查一下考试时间"></label>
+          <button id="btn-add-inbox">放进收集箱</button>
+          <p class="tracker-status" id="inbox-status" hidden></p>
+        </div>
+        <p class="tracker-hint">归档只标记这条去了哪个模块，不会把内容复制过去，也不会在那边凭空造出记录。</p>
+      </section>
+      <section class="tracker-list-card"><header><span>待处理</span><h2>还没归类的</h2></header><div class="tracker-list" id="inbox-list"></div></section>
+    </div>
+  </main>
+
+  <main class="life-module tracker-module" data-module-panel="insights" hidden>
+    <header class="life-module__head">
+      <div><span class="life-module__eyebrow">CROSS · INSIGHTS</span><h1>洞察</h1><p>看两个指标是不是一起动。这里全部是相关，不是因果。</p></div>
+      <button class="module-jump" data-module-jump="overview">返回生活总览 <span>→</span></button>
+    </header>
+    <section class="dashboard-panel">
+      <header><div><h2>同期变化</h2><p id="insights-note"></p></div>
+        <select id="insights-days" aria-label="观察窗口">
+          <option value="30">最近 30 天</option><option value="90" selected>最近 90 天</option><option value="180">最近 180 天</option>
+        </select>
+      </header>
+      <div id="insights-list"></div>
+    </section>
+    <section class="dashboard-panel">
+      <header><div><h2>数据健康度</h2><p>哪些指标最近没在记。它衡量的是模块还在不在被使用，不是自律程度</p></div></header>
+      <div id="health-list"></div>
+    </section>
+    <section class="dashboard-panel">
+      <header><div><h2>标签</h2><p>一个标签可以横跨多个模块；失效链接指向已被删除的记录</p></div>
+        <button class="template-button" id="btn-cleanup-tags">清理失效链接</button>
+      </header>
+      <div id="tags-list"></div>
+    </section>
   </main>
 
   <div class="life-search-overlay" id="life-search-overlay" hidden>
