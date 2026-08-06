@@ -1791,6 +1791,29 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
 .import-file-label input { padding: 7px 9px; font-size: 9.5px; color: var(--text-3); }
 .import-summary { margin-top: 12px; padding: 10px 11px; border-radius: 8px; color: var(--text-3); font-size: 10.5px; background: rgba(156,195,255,.04); border: 1px solid rgba(156,195,255,.1); }
 .import-summary.is-error { color: #ffb3b3; background: rgba(255,122,122,.035); border-color: rgba(255,122,122,.15); }
+
+/* 账单对账：把「已经记过」和「还没记」分开显示，避免看成一堆待办 */
+.statement-panel { grid-column: 1 / -1; }
+.statement-panel .import-controls select { height: 38px; padding: 0 10px; border: 1px solid var(--line-1);
+  border-radius: var(--r-md); background: rgba(255,255,255,.03); color: var(--text-1); font-size: 11px; }
+.statement-summary { margin-top: 12px; padding: 10px 11px; border-radius: 8px; font-size: 10.5px;
+  color: var(--text-3); background: rgba(156,195,255,.04); border: 1px solid rgba(156,195,255,.1); }
+.statement-summary.is-error { color: #ffb3b3; background: rgba(255,122,122,.035); border-color: rgba(255,122,122,.15); }
+.statement-stats { display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: baseline; }
+.statement-stats em { color: var(--text-2); font-style: normal; }
+.statement-stats strong { color: var(--text-1); }
+.statement-stats .is-new strong { color: var(--gold-bloom); }
+.statement-stats .is-skip { color: var(--text-4); }
+.statement-preview { margin-top: 10px; max-height: 320px; overflow-y: auto; }
+.statement-preview h4 { margin: 12px 0 6px; color: var(--text-4); font-size: 10px; font-weight: 600; letter-spacing: .08em; }
+.statement-preview h4:first-child { margin-top: 0; }
+.statement-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto; gap: 10px; align-items: baseline;
+  padding: 7px 0; border-bottom: 1px solid var(--line-1); font-size: 11px; color: var(--text-3); }
+.statement-row:last-child { border-bottom: 0; }
+.statement-row__note { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text-2); }
+.statement-row em { font-style: normal; color: var(--text-1); }
+.statement-row em.is-income { color: var(--gold-bloom); }
+.statement-row--skip { color: var(--text-4); grid-template-columns: 92px minmax(0, 1fr); }
 .import-preview { margin-top: 10px; max-height: 230px; overflow: auto; }
 .import-table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
 .import-table th { position: sticky; top: 0; padding: 7px; text-align: left; color: var(--text-4); background: #131322; }

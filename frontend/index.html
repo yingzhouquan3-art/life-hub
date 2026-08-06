@@ -564,6 +564,36 @@
             <p class="import-note">支持表头：日期/date、类型/type、金额/amount、分类/category、来源/source、备注/note、账户/account。收入缺少来源时保守归为家庭生活费。</p>
             <div class="import-history" id="import-history"></div>
           </section>
+
+          <section class="dashboard-panel statement-panel">
+            <header>
+              <div>
+                <h2>微信 / 支付宝账单对账</h2>
+                <p>和已有交易比对，只补没记过的那些，不重复入账</p>
+              </div>
+            </header>
+            <div class="import-controls">
+              <label class="import-file-label">
+                <span>选择导出的账单 CSV</span>
+                <input id="statement-file" type="file" accept=".csv,text/csv">
+              </label>
+              <select id="statement-source" aria-label="账单来源">
+                <option value="">自动识别来源</option>
+                <option value="wechat">微信支付账单</option>
+                <option value="alipay">支付宝账单</option>
+              </select>
+              <button id="btn-analyze-statement">解析并对账</button>
+            </div>
+            <div class="statement-summary" id="statement-summary" hidden></div>
+            <div class="statement-preview" id="statement-preview"></div>
+            <button class="import-commit" id="btn-commit-statement" disabled>确认写入 0 笔</button>
+            <p class="plan-status plan-status--error" id="statement-error" hidden></p>
+            <p class="import-note">
+              账单是权威事实，捕获和手记只是让你早点看到。对不上只表示账本里没有匹配的记录，
+              不代表这笔钱一定没记（比如日期填错了一天），所以要你确认后才写入。
+              退款、已关闭、支付失败的行不是实际支出，会被跳过。
+            </p>
+          </section>
         </div>
       </div>
 

@@ -137,6 +137,7 @@
       return response.json();
     },
     delTx:    (id) => fetch(`${API}/transactions/${id}`, { method: 'DELETE' }).then(r => r.json()),
+    previewStatement: (body) => post(`${API}/statements/preview`, body),
     confirmCapture: (id, body) => post(`${API}/capture/${id}/confirm`, body),
     dismissCapture: (id) => post(`${API}/capture/${id}/dismiss`, {}),
     delWorkout: async (id) => {
@@ -206,6 +207,7 @@
     transfers: [],
     planning: { settings: {}, goals: [], forecast: {} },
     importPreview: null,
+    statementPreview: null,
     importBatches: [],
     calendar: { bills: [], summary: {}, review: {} },
     today: {},
@@ -553,6 +555,13 @@
     importSummary: $('#import-summary'),
     importPreview: $('#import-preview'),
     btnCommitImport: $('#btn-commit-import'),
+    statementFile: $('#statement-file'),
+    statementSource: $('#statement-source'),
+    btnAnalyzeStatement: $('#btn-analyze-statement'),
+    statementSummary: $('#statement-summary'),
+    statementPreview: $('#statement-preview'),
+    btnCommitStatement: $('#btn-commit-statement'),
+    statementError: $('#statement-error'),
     importError: $('#import-error'),
     importHistory: $('#import-history'),
 
@@ -1317,6 +1326,58 @@
     return { fileName, rows, validRows, errorCount: rows.length - validRows.length };
   }
 
+  // ---------- 微信 / 支付宝账单对账 ----------
+  // 账单是权威事实，但「对不上」只表示账本里没有匹配的记录，
+  // 不能推导这笔钱一定没记，所以一律要用户确认后才写入。
+  function renderStatementPreview() {
+    const preview = state.statementPreview;
+    if (!preview) {
+      els.statementSummary.hidden = true;
+      els.statementPreview.innerHTML = '';
+      els.btnCommitStatement.disabled = true;
+      els.btnCommitStatement.textContent = '确认写入 0 笔';
+      return;
+    }
+
+    const parsed = preview.summary || {};
+    const recon = preview.reconciliation?.summary || {};
+    els.statementSummary.hidden = false;
+    els.statementSummary.classList.remove('is-error');
+    els.statementSummary.innerHTML = `
+      <div class="statement-stats">
+        <span><em>${escapeHtml(preview.source_label || '')}</em>${parsed.date_from ? ` ${escapeHtml(parsed.date_from)} 至 ${escapeHtml(parsed.date_to)}` : ''}</span>
+        <span>解析 <strong>${fmtInt(parsed.parsed || 0)}</strong> 条</span>
+        <span>已经记过 <strong>${fmtInt(recon.matched || 0)}</strong> 条</span>
+        <span class="is-new">还没记 <strong>${fmtInt(recon.new || 0)}</strong> 条 · ${fmtCNY(recon.new_amount || 0)}</span>
+        ${parsed.skipped ? `<span class="is-skip">跳过 <strong>${fmtInt(parsed.skipped)}</strong> 条</span>` : ''}
+      </div>`;
+
+    const rows = preview.reconciliation?.new || [];
+    const skipped = preview.skipped || [];
+    const parts = [];
+    if (rows.length) {
+      parts.push('<h4>将要写入</h4>' + rows.map(row => `
+        <div class="statement-row">
+          <span>${escapeHtml(row.occurred_on)}</span>
+          <span class="statement-row__note">${escapeHtml(row.note)}</span>
+          <em class="${row.type === 'income' ? 'is-income' : ''}">${row.type === 'income' ? '+' : '−'}${fmtCNY(row.amount)}</em>
+        </div>`).join(''));
+    } else {
+      parts.push('<div class="today-empty">这份账单里的每一条都已经在账本里了，没有需要补录的。</div>');
+    }
+    if (skipped.length) {
+      parts.push('<h4>已跳过</h4>' + skipped.map(item => `
+        <div class="statement-row statement-row--skip">
+          <span>第 ${fmtInt(item.line)} 行</span>
+          <span class="statement-row__note">${escapeHtml(item.reason)}</span>
+        </div>`).join(''));
+    }
+    els.statementPreview.innerHTML = parts.join('');
+
+    els.btnCommitStatement.disabled = rows.length === 0;
+    els.btnCommitStatement.textContent = `确认写入 ${fmtInt(rows.length)} 笔`;
+  }
+
   function renderImportPreview() {
     const preview = state.importPreview;
     if (!preview) {
@@ -1951,6 +2012,7 @@
     renderDashboard();
     renderPlanning();
     renderImportPreview();
+    renderStatementPreview();
     renderImportHistory();
     renderMonthlyReview();
     renderDataCenter();
@@ -2862,6 +2924,57 @@
       renderImportPreview();
       els.importError.textContent = error.message || 'CSV 无法解析';
       els.importError.hidden = false;
+    }
+  });
+
+  els.btnAnalyzeStatement.addEventListener('click', async () => {
+    const file = els.statementFile.files?.[0];
+    els.statementError.hidden = true;
+    if (!file) { els.statementFile.click(); return; }
+    els.btnAnalyzeStatement.disabled = true;
+    try {
+      const text = await readStatementFile(file);
+      state.statementPreview = await api.previewStatement({
+        content: text,
+        source: els.statementSource.value || null,
+        filename: file.name,
+      });
+      renderStatementPreview();
+    } catch (error) {
+      state.statementPreview = null;
+      renderStatementPreview();
+      els.statementError.textContent = String(error.message || '账单无法解析').replace(/^\d+\s*/, '');
+      els.statementError.hidden = false;
+    } finally {
+      els.btnAnalyzeStatement.disabled = false;
+    }
+  });
+
+  els.btnCommitStatement.addEventListener('click', async () => {
+    const preview = state.statementPreview;
+    if (state.busy || !preview?.import_payload?.rows?.length) return;
+    state.busy = true;
+    els.btnCommitStatement.disabled = true;
+    els.statementError.hidden = true;
+    try {
+      // 交给账本已有的安全导入：那里还有一层内容防重和整批撤销
+      const response = await api.importTransactions(preview.import_payload);
+      state.statementPreview = null;
+      els.statementFile.value = '';
+      await loadAndPaint();
+      els.statementSummary.hidden = false;
+      els.statementSummary.classList.remove('is-error');
+      els.statementSummary.textContent =
+        `已补录 ${response.imported_count || 0} 笔。重复的没有再记一遍，可以在上面的导入记录里整批撤销。`;
+    } catch (error) {
+      const duplicate = String(error.message || '').startsWith('409');
+      els.statementError.textContent = duplicate
+        ? '这批内容已经导入过，本次没有重复记账。'
+        : String(error.message || '写入失败').replace(/^\d+\s*/, '');
+      els.statementError.hidden = false;
+      els.btnCommitStatement.disabled = false;
+    } finally {
+      state.busy = false;
     }
   });
 
