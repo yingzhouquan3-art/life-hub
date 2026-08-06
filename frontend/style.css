@@ -1370,6 +1370,18 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
 .quick-preview label[hidden] { display: none; }
 .quick-preview input, .quick-preview select, .semester-form input, .semester-form select { width: 100%; min-width: 0; height: 36px; padding: 0 10px; border: 1px solid var(--line-1); border-radius: 7px; background: rgba(255,255,255,.03); color: var(--text-1); }
 .quick-note { margin-top: 9px; }
+
+/* 一句话记录：模块切换与动态字段 */
+.quick-modules { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.quick-module { padding: 4px 11px; border-radius: 999px; font-size: 10.5px; cursor: pointer;
+  border: 1px solid var(--line-1); background: transparent; color: var(--text-3); }
+.quick-module:hover { color: var(--text-2); border-color: var(--line-2); }
+.quick-module.is-on { color: var(--gold-bloom); background: rgba(255,209,102,.1); border-color: rgba(255,209,102,.28); }
+.quick-dynamic { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 9px; }
+.quick-dynamic label { display: flex; flex-direction: column; gap: 5px; color: var(--text-3); font-size: 10px; }
+.quick-dynamic label.is-wide { grid-column: 1 / -1; }
+.quick-dynamic input, .quick-dynamic select { width: 100%; min-width: 0; height: 36px; padding: 0 10px;
+  border: 1px solid var(--line-1); border-radius: 7px; background: rgba(255,255,255,.03); color: var(--text-1); }
 .quick-warnings { margin-top: 8px; color: #ffcc8a; font-size: 10.5px; }
 .quick-preview__actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
 .quick-preview__actions button:first-child { color: var(--text-3); border-color: var(--line-1); background: transparent; }

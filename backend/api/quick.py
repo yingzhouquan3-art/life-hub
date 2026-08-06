@@ -26,6 +26,9 @@ router = APIRouter()
 
 class QuickTextIn(BaseModel):
     text: str = Field(..., min_length=1, max_length=200)
+    module: Optional[
+        Literal["finance", "fitness", "nutrition", "recovery", "study", "rhythm"]
+    ] = None
 
 
 class QuickCommitIn(BaseModel):
@@ -122,9 +125,12 @@ def quick_modules():
 
 @router.post("/api/quick/parse")
 def parse_quick(body: QuickTextIn):
-    """解析一句话，返回可编辑预览。这一步不写入任何数据。"""
+    """解析一句话，返回可编辑预览。这一步不写入任何数据。
+
+    带上 module 表示用户改判了归属，按指定模块重新解析同一句话。
+    """
     with db() as conn:
-        return parse_quick_record(conn, body.text)
+        return parse_quick_record(conn, body.text, body.module)
 
 
 @router.post("/api/quick/commit")

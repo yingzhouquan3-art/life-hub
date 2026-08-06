@@ -31,6 +31,10 @@ class QuickRecordTests(unittest.TestCase):
         with main.db() as conn:
             return parse_quick_record(conn, text)
 
+    def parse_as(self, text, module):
+        with main.db() as conn:
+            return parse_quick_record(conn, text, module)
+
     # ---------- 分流 ----------
 
     def test_routes_to_the_right_module(self):
@@ -112,6 +116,42 @@ class QuickRecordTests(unittest.TestCase):
             any("截止日期" in warning for warning in result["warnings"]),
             "没认出「周五」就必须说清楚日期是默认填的",
         )
+
+    # ---------- 用户改判后按指定模块重新解析 ----------
+
+    def test_forcing_a_module_reparses_the_same_sentence(self):
+        """改判到饮食后，「午饭」仍要认成午餐，而不是退化成加餐。
+
+        字段推断留在后端，前端不需要复制一份关键词逻辑。
+        """
+        result = self.parse_as("午饭 16.5 支付宝", "nutrition")
+        self.assertEqual(result["module"], "nutrition")
+        self.assertEqual(result["preview"]["meal_type"], "lunch")
+
+    def test_forced_module_still_lists_the_original_candidate(self):
+        result = self.parse_as("午饭 16.5 支付宝", "nutrition")
+        self.assertIn("finance", result["alternatives"])
+
+    def test_forcing_a_module_works_even_without_keywords(self):
+        """认不出归属的句子，用户仍然可以指定一个模块手动填。
+
+        标题里的「今天」被日期解析吃掉了，这是刻意的：日期词进 due_on，
+        不该再留在待办标题里。
+        """
+        result = self.parse_as("今天天气不错", "rhythm")
+        self.assertTrue(result["matched"])
+        self.assertEqual(result["module"], "rhythm")
+        self.assertEqual(result["preview"]["title"], "天气不错")
+        self.assertEqual(result["preview"]["due_on"], date.today().isoformat())
+
+    def test_unknown_forced_module_is_rejected(self):
+        with self.assertRaises(HTTPException):
+            self.parse_as("跑步 30 分钟", "telepathy")
+
+    def test_forcing_finance_still_returns_a_transaction_preview(self):
+        result = self.parse_as("跑步 30 分钟", "finance")
+        self.assertEqual(result["module"], "finance")
+        self.assertIn("amount", result["preview"])
 
     # ---------- 解析不写入 ----------
 

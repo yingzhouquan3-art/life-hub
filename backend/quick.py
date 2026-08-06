@@ -206,14 +206,22 @@ _PREVIEW_BUILDERS = {
 }
 
 
-def parse_quick_record(conn, raw_text: str) -> dict:
-    """把一句话解析成某个模块的待确认预览。只读，不写入任何表。"""
+def parse_quick_record(conn, raw_text: str, module: Optional[str] = None) -> dict:
+    """把一句话解析成某个模块的待确认预览。只读，不写入任何表。
+
+    指定 module 表示用户已经改判过了：不再推断归属，直接按那个模块解析同一句话。
+    这样改判后的字段仍然由后端推断，前端不需要复制一份关键词逻辑。
+    """
     text = " ".join((raw_text or "").strip().split())
     if not text:
         raise HTTPException(400, "请输入一句话，例如：跑步 30 分钟 强度 6")
+    if module is not None and module not in MODULE_LABELS:
+        raise HTTPException(400, f"未知模块：{module}")
 
     when, stripped, explicit_date = _resolve_date(text)
     candidates = _scored_intent(text)
+    if module is not None:
+        candidates = [module] + [key for key in candidates if key != module]
 
     if not candidates:
         return {

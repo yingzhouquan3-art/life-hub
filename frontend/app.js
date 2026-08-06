@@ -54,7 +54,8 @@
     transfer: (body) => post(`${API}/transfers`, body),
     savePlan: (body) => post(`${API}/planning/settings`, body),
     saveSemester: (body) => post(`${API}/planning/semester`, body),
-    quickParse: (body) => post(`${API}/quick-entry/parse`, body),
+    quickParse: (body) => post(`${API}/quick/parse`, body),
+    quickCommit: (body) => post(`${API}/quick/commit`, body),
     calendar: () => fetch(`${API}/calendar`).then(r => r.json()),
     annualReport: (year) => fetch(`${API}/reports/annual?year=${encodeURIComponent(year)}`).then(r => r.json()),
     searchTransactions: async (params = {}) => {
@@ -479,6 +480,9 @@
     quickDate: $('#quick-date'),
     quickNote: $('#quick-note'),
     quickWarnings: $('#quick-warnings'),
+    quickModules: $('#quick-modules'),
+    quickFinanceFields: $('#quick-finance-fields'),
+    quickDynamic: $('#quick-dynamic'),
     btnQuickConfirm: $('#btn-quick-confirm'),
     btnQuickCancel: $('#btn-quick-cancel'),
 
@@ -3314,6 +3318,52 @@
     } finally { state.busy = false; }
   });
 
+  // ---------- 一句话记录 ----------
+  // 一句话可能属于任何一个生活模块。账本的预览布局原样保留，
+  // 只有判到别的模块时才切换成动态字段；判错了可以一键改判。
+  const QUICK_MODULE_LABELS = {
+    finance: '账本', fitness: '健身', nutrition: '饮食',
+    recovery: '睡眠', study: '学习', rhythm: '待办',
+  };
+
+  const QUICK_FIELDS = {
+    fitness: [
+      { key: 'occurred_on', label: '日期', type: 'date' },
+      { key: 'activity', label: '类型', type: 'select', options: [['strength', '力量'], ['cardio', '有氧'], ['sport', '球类 / 户外'], ['mobility', '拉伸 / 放松'], ['other', '其他']] },
+      { key: 'duration_minutes', label: '时长（分钟）', type: 'number' },
+      { key: 'intensity', label: '强度 1-10', type: 'number' },
+      { key: 'note', label: '备注', type: 'text', wide: true },
+    ],
+    nutrition: [
+      { key: 'occurred_on', label: '日期', type: 'date' },
+      { key: 'meal_type', label: '餐次', type: 'select', options: [['breakfast', '早餐'], ['lunch', '午餐'], ['dinner', '晚餐'], ['snack', '加餐 / 饮水']] },
+      { key: 'name', label: '内容', type: 'text' },
+      { key: 'calories', label: '热量 kcal（可留空）', type: 'number' },
+      { key: 'protein_g', label: '蛋白质 g（可留空）', type: 'number' },
+      { key: 'water_ml', label: '饮水 ml（可留空）', type: 'number' },
+    ],
+    recovery: [
+      { key: 'occurred_on', label: '日期', type: 'date' },
+      { key: 'sleep_hours', label: '睡眠小时（可留空）', type: 'number' },
+      { key: 'energy', label: '精力 1-5（可留空）', type: 'number' },
+      { key: 'mood', label: '心情 1-5（可留空）', type: 'number' },
+      { key: 'note', label: '备注', type: 'text', wide: true },
+    ],
+    study: [
+      { key: 'occurred_on', label: '日期', type: 'date' },
+      { key: 'subject', label: '科目', type: 'text' },
+      { key: 'duration_minutes', label: '时长（分钟）', type: 'number' },
+      { key: 'focus', label: '专注 1-5', type: 'number' },
+      { key: 'note', label: '备注', type: 'text', wide: true },
+    ],
+    rhythm: [
+      { key: 'title', label: '待办', type: 'text', wide: true },
+      { key: 'due_on', label: '截止日', type: 'date' },
+      { key: 'priority', label: '优先级', type: 'select', options: [['low', '低'], ['normal', '普通'], ['high', '高']] },
+      { key: 'category', label: '归类', type: 'select', options: [['personal', '个人'], ['study', '学习'], ['health', '健康'], ['finance', '财务'], ['other', '其他']] },
+    ],
+  };
+
   function syncQuickPreviewType() {
     const isIncome = els.quickType.value === 'income';
     els.quickCategoryField.hidden = isIncome;
@@ -3325,6 +3375,108 @@
     els.quickPreview.hidden = true;
     els.quickEntryStatus.hidden = true;
     els.quickWarnings.innerHTML = '';
+    els.quickModules.hidden = true;
+    els.quickModules.innerHTML = '';
+    els.quickDynamic.hidden = true;
+    els.quickDynamic.innerHTML = '';
+    els.quickFinanceFields.hidden = false;
+    els.btnQuickConfirm.textContent = '确认入账';
+  }
+
+  function renderQuickModules() {
+    const preview = state.quickPreview;
+    if (!preview) return;
+    els.quickModules.hidden = false;
+    els.quickModules.innerHTML = Object.keys(QUICK_MODULE_LABELS).map(key =>
+      `<button type="button" class="quick-module${key === preview.module ? ' is-on' : ''}" data-quick-module="${key}">${QUICK_MODULE_LABELS[key]}</button>`
+    ).join('');
+    els.quickModules.querySelectorAll('[data-quick-module]').forEach(button => {
+      button.addEventListener('click', () => switchQuickModule(button.dataset.quickModule));
+    });
+  }
+
+  function renderQuickDynamic() {
+    const preview = state.quickPreview;
+    const fields = QUICK_FIELDS[preview.module] || [];
+    const payload = preview.payload || {};
+    els.quickDynamic.innerHTML = fields.map(field => {
+      const value = payload[field.key] == null ? '' : String(payload[field.key]);
+      const wide = field.wide ? ' class="is-wide"' : '';
+      if (field.type === 'select') {
+        const options = field.options
+          .map(([key, label]) => `<option value="${key}"${key === value ? ' selected' : ''}>${label}</option>`)
+          .join('');
+        return `<label${wide}><span>${field.label}</span><select data-quick-field="${field.key}">${options}</select></label>`;
+      }
+      return `<label${wide}><span>${field.label}</span><input data-quick-field="${field.key}" type="${field.type}" value="${escapeHtml(value)}"></label>`;
+    }).join('');
+    els.quickDynamic.querySelectorAll('[data-quick-field]').forEach(input => {
+      const sync = () => {
+        const raw = input.value.trim();
+        preview.payload[input.dataset.quickField] = raw === '' ? null : raw;
+      };
+      input.addEventListener('input', sync);
+      input.addEventListener('change', sync);
+    });
+  }
+
+  /** 换一个模块：让后端按新归属重新解析同一句话。
+   *
+   * 不在前端复制一份关键词逻辑——否则「午饭」在账本里认得出，
+   * 改判到饮食后却变成了「加餐」。
+   */
+  async function switchQuickModule(moduleKey) {
+    const preview = state.quickPreview;
+    if (!preview || preview.module === moduleKey || state.busy) return;
+
+    if (preview.payloads[moduleKey]) {
+      applyQuickModule(moduleKey, preview.payloads[moduleKey]);
+      return;
+    }
+    state.busy = true;
+    els.quickEntryStatus.hidden = true;
+    try {
+      const parsed = await api.quickParse({ text: preview.input, module: moduleKey });
+      const payload = parsed.matched ? Object.assign({}, parsed.preview) : {};
+      preview.payloads[moduleKey] = payload;
+      preview.confidences[moduleKey] = Number(parsed.confidence || 0);
+      preview.moduleWarnings[moduleKey] = parsed.warnings || [];
+      applyQuickModule(moduleKey, payload);
+    } catch (error) {
+      els.quickEntryStatus.textContent = String(error.message || '改判失败').replace(/^\d+\s*/, '');
+      els.quickEntryStatus.hidden = false;
+    } finally {
+      state.busy = false;
+    }
+  }
+
+  function applyQuickModule(moduleKey, payload) {
+    const preview = state.quickPreview;
+    preview.module = moduleKey;
+    preview.payload = payload;
+    els.quickConfidence.textContent =
+      `${QUICK_MODULE_LABELS[moduleKey]} · 置信度 ${Math.round((preview.confidences[moduleKey] || 0) * 100)}%`;
+    els.quickWarnings.innerHTML = (preview.moduleWarnings[moduleKey] || [])
+      .map(item => `<div>• ${escapeHtml(item)}</div>`).join('');
+    if (moduleKey === 'finance') {
+      els.quickFinanceFields.hidden = false;
+      els.quickDynamic.hidden = true;
+      els.quickType.value = payload.type || 'expense';
+      els.quickAmount.value = Number(payload.amount || 0) || '';
+      fillAccountSelect(els.quickAccount, payload.account_id);
+      els.quickCategory.value = payload.category || 'other';
+      els.quickSource.value = payload.source || 'other';
+      els.quickDate.value = payload.occurred_on || todayISO();
+      els.quickNote.value = payload.note || preview.input;
+      syncQuickPreviewType();
+      els.btnQuickConfirm.textContent = '确认入账';
+    } else {
+      els.quickFinanceFields.hidden = true;
+      els.quickDynamic.hidden = false;
+      els.btnQuickConfirm.textContent = `确认记入${QUICK_MODULE_LABELS[moduleKey]}`;
+      renderQuickDynamic();
+    }
+    renderQuickModules();
   }
 
   async function parseQuickEntry() {
@@ -3335,22 +3487,26 @@
     els.btnQuickParse.disabled = true;
     els.quickEntryStatus.hidden = true;
     try {
-      const preview = await api.quickParse({ text });
-      state.quickPreview = preview;
-      const tx = preview.transaction || {};
-      els.quickType.value = tx.type || 'expense';
-      els.quickAmount.value = Number(tx.amount || 0) || '';
-      fillAccountSelect(els.quickAccount, tx.account_id);
-      els.quickCategory.value = tx.category || 'other';
-      els.quickSource.value = tx.source || 'other';
-      els.quickDate.value = tx.occurred_on || todayISO();
-      els.quickNote.value = tx.note || text;
-      els.quickConfidence.textContent = `识别置信度 ${Math.round(Number(preview.confidence || 0) * 100)}%`;
-      els.quickWarnings.innerHTML = (preview.warnings || []).map(item => `<div>• ${escapeHtml(item)}</div>`).join('');
-      syncQuickPreviewType();
+      const parsed = await api.quickParse({ text });
+      if (!parsed.matched) {
+        clearQuickPreview();
+        els.quickEntryStatus.textContent = parsed.reason || '认不出这句话属于哪个模块';
+        els.quickEntryStatus.hidden = false;
+        return;
+      }
+      state.quickPreview = {
+        input: text,
+        module: parsed.module,
+        payload: Object.assign({}, parsed.preview),
+        payloads: { [parsed.module]: Object.assign({}, parsed.preview) },
+        confidences: { [parsed.module]: Number(parsed.confidence || 0) },
+        moduleWarnings: { [parsed.module]: parsed.warnings || [] },
+      };
+      // 首次解析和改判走同一条渲染路径，避免两处逻辑日后走偏
+      applyQuickModule(parsed.module, state.quickPreview.payload);
       els.quickPreview.hidden = false;
     } catch (error) {
-      els.quickEntryStatus.textContent = error.message || '暂时无法解析这句话';
+      els.quickEntryStatus.textContent = String(error.message || '暂时无法解析这句话').replace(/^\d+\s*/, '');
       els.quickEntryStatus.hidden = false;
       els.quickPreview.hidden = true;
     } finally {
@@ -3368,30 +3524,53 @@
   els.btnQuickConfirm.addEventListener('click', async () => {
     if (state.busy) return;
     if (!state.settings) { showOverlay(); return; }
-    const amount = parseFloat(els.quickAmount.value);
-    if (!(amount > 0)) { els.quickAmount.focus(); return; }
+    const preview = state.quickPreview;
+    if (!preview) return;
+
+    // 账本走原来的入账路径，保留点亮方格的仪式动画
+    if (preview.module === 'finance') {
+      const amount = parseFloat(els.quickAmount.value);
+      if (!(amount > 0)) { els.quickAmount.focus(); return; }
+      state.busy = true;
+      els.btnQuickConfirm.disabled = true;
+      els.quickEntryStatus.hidden = true;
+      try {
+        const res = await api.addTx({
+          type: els.quickType.value,
+          source: els.quickType.value === 'income' ? els.quickSource.value : null,
+          category: els.quickType.value === 'expense' ? els.quickCategory.value : null,
+          account_id: Number(els.quickAccount.value),
+          amount,
+          note: els.quickNote.value.trim(),
+          occurred_on: els.quickDate.value || todayISO(),
+        });
+        clearQuickPreview();
+        els.quickEntryInput.value = '';
+        await loadAndPaint();
+        switchStageView('today');
+        await playAnimation(res);
+        grid.setData(state.stats);
+        renderProgress();
+      } catch (error) {
+        els.quickEntryStatus.textContent = String(error.message || '入账失败，当前账本没有改变').replace(/^\d+\s*/, '');
+        els.quickEntryStatus.hidden = false;
+      } finally {
+        state.busy = false;
+        els.btnQuickConfirm.disabled = false;
+      }
+      return;
+    }
+
     state.busy = true;
     els.btnQuickConfirm.disabled = true;
     els.quickEntryStatus.hidden = true;
     try {
-      const res = await api.addTx({
-        type: els.quickType.value,
-        source: els.quickType.value === 'income' ? els.quickSource.value : null,
-        category: els.quickType.value === 'expense' ? els.quickCategory.value : null,
-        account_id: Number(els.quickAccount.value),
-        amount,
-        note: els.quickNote.value.trim(),
-        occurred_on: els.quickDate.value || todayISO(),
-      });
+      await api.quickCommit({ module: preview.module, payload: preview.payload });
       clearQuickPreview();
       els.quickEntryInput.value = '';
       await loadAndPaint();
-      switchStageView('today');
-      await playAnimation(res);
-      grid.setData(state.stats);
-      renderProgress();
     } catch (error) {
-      els.quickEntryStatus.textContent = error.message || '入账失败，当前账本没有改变';
+      els.quickEntryStatus.textContent = String(error.message || '写入失败，没有留下任何记录').replace(/^\d+\s*/, '');
       els.quickEntryStatus.hidden = false;
     } finally {
       state.busy = false;

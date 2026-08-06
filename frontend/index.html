@@ -349,14 +349,16 @@
         </section>
         <div class="today-grid">
           <section class="dashboard-panel quick-entry-panel">
-            <header><div><h2>一句话记账</h2><p>先解析预览，只有确认后才写入账本</p></div></header>
+            <header><div><h2>一句话记录</h2><p>自动判断属于哪个模块，先预览、可改判，确认后才写入</p></div></header>
             <div class="quick-entry-box">
-              <input id="quick-entry-input" type="text" maxlength="120" placeholder="例如：午饭 16.5 支付宝">
+              <input id="quick-entry-input" type="text" maxlength="200" placeholder="例如：午饭 16.5 支付宝 / 跑步 30 分钟 强度 6 / 睡了 7 小时">
               <button id="btn-quick-parse">解析</button>
             </div>
             <p class="plan-status plan-status--error" id="quick-entry-status" hidden></p>
             <div class="quick-preview" id="quick-preview" hidden>
               <div class="quick-preview__head"><strong>确认前预览</strong><span id="quick-confidence"></span></div>
+              <div class="quick-modules" id="quick-modules" hidden></div>
+              <div id="quick-finance-fields">
               <div class="quick-preview__grid">
                 <label><span>类型</span><select id="quick-type"><option value="expense">支出</option><option value="income">收入</option></select></label>
                 <label><span>金额</span><input id="quick-amount" type="number" min="0" step="0.01"></label>
@@ -366,6 +368,8 @@
                 <label><span>日期</span><input id="quick-date" type="date"></label>
               </div>
               <label class="quick-note"><span>备注</span><input id="quick-note" type="text" maxlength="120"></label>
+              </div>
+              <div class="quick-dynamic" id="quick-dynamic" hidden></div>
               <div class="quick-warnings" id="quick-warnings"></div>
               <div class="quick-preview__actions"><button id="btn-quick-cancel">取消</button><button id="btn-quick-confirm">确认入账</button></div>
             </div>
