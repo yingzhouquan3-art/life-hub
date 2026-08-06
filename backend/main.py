@@ -25,6 +25,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from backend.api import body as body_api
 from backend.api import capture as capture_api
 from backend.api import fitness as fitness_api
 from backend.api import goals as goals_api
@@ -37,6 +38,7 @@ from backend.api import reflection as reflection_api
 from backend.api import rhythm as rhythm_api
 from backend.api import statements as statements_api
 from backend.api import study as study_api
+from backend.api import training as training_api
 from backend.api import views as views_api
 from backend.core import registry
 from backend.core.access import TOKEN_HEADER, access_allowed
@@ -82,8 +84,10 @@ async def guard_remote_access(request: Request, call_next):
 app.include_router(platform_api.router)
 app.include_router(ledger_api.router)
 app.include_router(fitness_api.router)
+app.include_router(training_api.router)
 app.include_router(nutrition_api.router)
 app.include_router(recovery_api.router)
+app.include_router(body_api.router)
 app.include_router(study_api.router)
 app.include_router(rhythm_api.router)
 app.include_router(reflection_api.router)

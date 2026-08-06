@@ -8,7 +8,8 @@
 - **生活日历**：按月份统一查看八个来源模块的生活事实、待办和固定账单安排
 - **个人目标**：管理长期生活方向、目标状态和阶段里程碑，目标日期接入生活日历
 - **个人账本**：完整保留原有账户、交易、预算、规划、月度复盘和人生方格
-- **个人健身**：记录活动类型、时长、强度和备注，查看今日与本周汇总
+- **个人健身**：活动记录 + 动作库、组数×重量×次数、训练容量与个人纪录
+- **身体指标**：体重、体脂与围度，每天一条可更新，含七日均值曲线
 - **个人饮食**：记录每餐或饮水；热量、蛋白质和饮水数值均可留空
 - **睡眠与恢复**：每天一条可更新的睡眠、精力和心情记录，不做医疗判断
 - **学习与专注**：记录已经完成的学习时段，汇总今日与本周投入
@@ -129,6 +130,7 @@ backend/
     fitness.py       个人健身
     nutrition.py     个人饮食
     recovery.py      睡眠与恢复
+    body.py          身体指标：体重、体脂与围度
     study.py         学习与专注
     rhythm.py        日程与习惯
     goals.py         个人目标与里程碑
@@ -142,7 +144,8 @@ backend/
     capture.py       待确认捕获与通知解析
     quick.py         一句话记录（解析 / 落库）
     statements.py    月度账单预览与对账
-    ledger.py fitness.py nutrition.py recovery.py study.py
+    training.py      动作库、组数与个人纪录
+    ledger.py fitness.py nutrition.py recovery.py body.py study.py
     rhythm.py reflection.py goals.py views.py
   quick.py           一句话记录的意图推断
   statements.py      账单解析与对账

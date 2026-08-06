@@ -14,6 +14,7 @@ from __future__ import annotations
 
 from backend.core import registry
 from backend.modules import (
+    body,
     capture,
     fitness,
     goals,
@@ -30,6 +31,7 @@ MODULES = (
     fitness.MODULE,
     nutrition.MODULE,
     recovery.MODULE,
+    body.MODULE,
     study.MODULE,
     rhythm.MODULE,
     reflection.MODULE,
