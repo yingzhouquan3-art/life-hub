@@ -217,22 +217,26 @@ try {
     Set-Content -Path $serverErrorLog -Value "" -Encoding UTF8
 
     # 默认只监听回环，手机连不进来但也没有任何暴露面。
-    # 需要手机访问时，把环境变量 LIFE_HUB_HOST 设成本机的 Tailscale 地址
-    # （100.x.x.x），或设成 "tailscale" 让启动器自己找。
-    # 刻意不提供 0.0.0.0 的快捷方式：那会把服务暴露给当前连着的任何一个网络。
-    $bindHost = $env:LIFE_HUB_HOST
-    if (-not $bindHost) { $bindHost = "127.0.0.1" }
-    if ($bindHost -eq "tailscale") {
-        $detected = & $venvPython -c "from backend.core.access import detect_tailscale_ip; print(detect_tailscale_ip() or '')"
-        if ($detected) {
-            $bindHost = $detected.Trim()
-        } else {
-            Write-Host "没有找到 Tailscale 地址，改为只监听本机。手机暂时连不进来。"
-            $bindHost = "127.0.0.1"
-        }
-    }
-    if ($bindHost -eq "0.0.0.0") {
-        throw "拒绝监听 0.0.0.0：那会把生活数据暴露给你连上的任何网络。请填具体的 Tailscale 地址。"
+    # 监听地址由 backend/core/access.py 的 resolve_bind_host 统一决定，
+    # 这里不重复一份判断逻辑。LIFE_HUB_HOST 可以是：
+    #   （不设）  只监听本机
+    #   auto      有 Tailscale 用 Tailscale，否则用当前局域网
+    #   lan       只用当前局域网（手机和电脑连同一个 WiFi）
+    #   tailscale 只用 Tailscale
+    #   具体地址   直接指定
+    # 任何情况下找不到目标网络都会退回回环；0.0.0.0 会被明确拒绝。
+    $hostPreference = $env:LIFE_HUB_HOST
+    $resolved = & $venvPython -c "import json,sys;from backend.core.access import resolve_bind_host;
+try:
+    print(json.dumps(resolve_bind_host(sys.argv[1] if len(sys.argv)>1 else '')))
+except ValueError as exc:
+    print(json.dumps({'error': str(exc)}))" $hostPreference
+    $binding = $resolved | ConvertFrom-Json
+    if ($binding.error) { throw $binding.error }
+    $bindHost = $binding.host
+    Write-Host $binding.reason
+    if ($binding.mode -ne "local") {
+        Write-Host "手机配对页面：http://127.0.0.1:8766/pair.html"
     }
 
     $serverArguments = @(

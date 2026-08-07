@@ -27,7 +27,7 @@
 <body>
 <div class="wrap">
   <h1>手机配对</h1>
-  <div class="sub">数据仍然只在这台电脑上。手机通过你自己的私有网络连进来，不经过任何第三方服务器。</div>
+  <div class="sub">数据仍然只在这台电脑上。手机通过你自己的网络直接连进来，不经过任何第三方服务器。</div>
 
   <div class="card">
     <h2>手机端地址</h2>
@@ -47,11 +47,16 @@
   <div class="card">
     <h2>怎么用</h2>
     <ol>
-      <li>手机和这台电脑都装上 <b>Tailscale</b> 并登录同一个账号。</li>
+      <li><b>最简单</b>：手机和这台电脑连<b>同一个 WiFi</b>，直接用上面的地址。数据不出这个局域网。</li>
       <li>把上面那条<b>带 token 的地址</b>发到手机上（微信发给自己最快），点开。</li>
       <li>页面会把令牌存进手机，之后地址栏里的 token 会自动抹掉。</li>
       <li>在手机浏览器里选「添加到主屏幕」，就有一个独立的随手记图标了。</li>
     </ol>
+    <div class="sub" style="margin-top:12px">
+      <b>连不上怎么办</b>：学校和公共 WiFi 常开「客户端隔离」，同一网络里的设备互相看不见。
+      这时可以用手机开热点、让电脑连上去，一样是同一个局域网。<br>
+      想出门在外也能连，就得装 Tailscale 这类工具；装不上也不影响上面的局域网方式。
+    </div>
   </div>
 </div>
 
@@ -70,13 +75,18 @@ async function load() {
     $('token').textContent = pairing.token;
     if (pairing.mobile_url) {
       const full = `${pairing.mobile_url}?token=${encodeURIComponent(pairing.token)}`;
+      const viaTailscale = pairing.mode === 'tailscale';
       $('mobile').innerHTML = `<code id="url">${full}</code>
-        <button id="copyUrl">复制地址</button>`;
+        <button id="copyUrl">复制地址</button>
+        <div class="sub" style="margin-top:10px">${viaTailscale
+          ? '走 Tailscale 私有网络：手机在哪都能连，不受 WiFi 限制。'
+          : '走当前局域网：<b>手机必须和这台电脑连同一个 WiFi</b>。换了网络或电脑换了 IP，这个地址就要重新取一次。'}</div>`;
       $('copyUrl').onclick = () => copy(full, $('copyUrl'));
     } else {
       $('mobile').innerHTML = `<div class="warn">
-        没有检测到 Tailscale 地址。手机现在连不进来——这不是程序出错，
-        是这台电脑还没加入你的 Tailscale 网络。装好并登录后刷新本页即可。</div>`;
+        既没有检测到 Tailscale，也没有检测到局域网地址。<br>
+        这不是程序出错——可能是电脑没连网络，或者只连着虚拟网卡。
+        连上 WiFi 后刷新本页即可。</div>`;
     }
   } catch (error) {
     $('mobile').innerHTML = `<div class="warn">${error.message}</div>`;

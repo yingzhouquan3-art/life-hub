@@ -13,22 +13,23 @@ fi
 
 PORT=8766
 
-# 默认只监听回环。需要手机访问时：
-#   LIFE_HUB_HOST=tailscale ./run.sh      自动找本机的 Tailscale 地址
-#   LIFE_HUB_HOST=100.x.x.x ./run.sh      指定地址
-# 刻意不支持 0.0.0.0：那会把生活数据暴露给当前连着的任何网络。
-HOST="${LIFE_HUB_HOST:-127.0.0.1}"
-if [ "$HOST" = "tailscale" ]; then
-  HOST="$("$VENV/bin/python" -c 'from backend.core.access import detect_tailscale_ip; print(detect_tailscale_ip() or "")')"
-  if [ -z "$HOST" ]; then
-    echo "[run] 没有找到 Tailscale 地址，改为只监听本机"
-    HOST="127.0.0.1"
-  fi
-fi
-if [ "$HOST" = "0.0.0.0" ]; then
-  echo "[run] 拒绝监听 0.0.0.0，请填具体的 Tailscale 地址" >&2
+# 监听地址由 backend/core/access.py 的 resolve_bind_host 统一决定。
+# LIFE_HUB_HOST 可以是 auto / lan / tailscale / 具体地址，不设则只监听本机。
+# 找不到目标网络会退回回环；0.0.0.0 会被明确拒绝。
+BINDING="$("$VENV/bin/python" -c '
+import json, os, sys
+from backend.core.access import resolve_bind_host
+try:
+    print(json.dumps(resolve_bind_host(os.environ.get("LIFE_HUB_HOST", ""))))
+except ValueError as exc:
+    print(json.dumps({"error": str(exc)}))
+')"
+if echo "$BINDING" | grep -q '"error"'; then
+  echo "[run] $BINDING" >&2
   exit 1
 fi
+HOST="$(echo "$BINDING" | "$VENV/bin/python" -c 'import json,sys; print(json.load(sys.stdin)["host"])')"
+echo "[run] $(echo "$BINDING" | "$VENV/bin/python" -c 'import json,sys; print(json.load(sys.stdin)["reason"])')"
 
 echo "[run] starting on http://$HOST:$PORT"
 echo "[run] 手机配对页面：http://127.0.0.1:$PORT/pair.html"

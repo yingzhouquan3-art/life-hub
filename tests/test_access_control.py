@@ -77,6 +77,80 @@ class AccessRuleTests(unittest.TestCase):
         self.assertFalse(access.is_tailscale_address("not-an-ip"))
 
 
+class BindHostTests(unittest.TestCase):
+    """监听地址的选择。
+
+    最重要的一条：找不到目标网络时一律退回回环。
+    宁可手机连不上，也不能在用户以为「没连上」的时候悄悄暴露出去。
+    """
+
+    def test_default_is_loopback_only(self):
+        for preference in ("", None, "local", "127.0.0.1", "localhost"):
+            with self.subTest(preference=preference):
+                self.assertEqual(access.resolve_bind_host(preference)["host"], "127.0.0.1")
+
+    def test_wildcard_is_refused(self):
+        for preference in ("0.0.0.0", "::"):
+            with self.subTest(preference=preference):
+                with self.assertRaises(ValueError):
+                    access.resolve_bind_host(preference)
+
+    def test_public_address_is_refused(self):
+        with self.assertRaises(ValueError):
+            access.resolve_bind_host("8.8.8.8")
+
+    def test_explicit_private_address_is_accepted(self):
+        result = access.resolve_bind_host("192.168.1.20")
+        self.assertEqual(result["host"], "192.168.1.20")
+        self.assertEqual(result["mode"], "lan")
+
+    def test_explicit_tailscale_address_is_accepted(self):
+        result = access.resolve_bind_host("100.101.102.103")
+        self.assertEqual(result["mode"], "tailscale")
+
+    def test_missing_network_falls_back_to_loopback(self):
+        original = access.detect_tailscale_ip
+        access.detect_tailscale_ip = lambda: None
+        try:
+            result = access.resolve_bind_host("tailscale")
+        finally:
+            access.detect_tailscale_ip = original
+        self.assertEqual(result["host"], "127.0.0.1")
+        self.assertEqual(result["mode"], "local")
+        self.assertIn("退回", result["reason"])
+
+    def test_auto_prefers_tailscale_then_lan(self):
+        original_ts, original_lan = access.detect_tailscale_ip, access.detect_lan_ip
+        try:
+            access.detect_tailscale_ip = lambda: "100.1.2.3"
+            access.detect_lan_ip = lambda: "192.168.1.9"
+            self.assertEqual(access.resolve_bind_host("auto")["mode"], "tailscale")
+
+            access.detect_tailscale_ip = lambda: None
+            self.assertEqual(access.resolve_bind_host("auto")["host"], "192.168.1.9")
+
+            access.detect_lan_ip = lambda: None
+            self.assertEqual(access.resolve_bind_host("auto")["host"], "127.0.0.1")
+        finally:
+            access.detect_tailscale_ip, access.detect_lan_ip = original_ts, original_lan
+
+    def test_virtual_and_placeholder_addresses_are_not_lan(self):
+        """这些看着像内网，绑上去手机根本连不通。"""
+        for address in ("169.254.83.107", "198.18.0.1", "100.64.0.1", "127.0.0.1"):
+            with self.subTest(address=address):
+                self.assertFalse(access.is_private_lan_address(address))
+
+    def test_real_private_ranges_are_lan(self):
+        for address in ("192.168.10.49", "10.0.0.5", "172.16.3.4"):
+            with self.subTest(address=address):
+                self.assertTrue(access.is_private_lan_address(address))
+
+    def test_detect_lan_ip_returns_a_usable_address_or_none(self):
+        found = access.detect_lan_ip()
+        if found is not None:
+            self.assertTrue(access.is_private_lan_address(found))
+
+
 class LiveServerTests(unittest.TestCase):
     """跑一个真服务器，确认中间件真的接上了。
 

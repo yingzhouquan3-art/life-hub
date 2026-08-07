@@ -2,15 +2,16 @@
 chcp 65001 >nul
 title 我的生活中枢 · 手机访问模式
 
-rem 让后端除了本机之外，还监听这台电脑的 Tailscale 地址。
-rem 找不到 Tailscale 时会自动退回「只监听本机」，不会把服务暴露出去。
-set "LIFE_HUB_HOST=tailscale"
+rem auto：有 Tailscale 就用 Tailscale（出门在外也能连），
+rem 没有就用当前局域网（手机和电脑连同一个 WiFi）。
+rem 两个都找不到时自动退回「只监听本机」，不会把服务暴露出去。
+set "LIFE_HUB_HOST=auto"
 
 echo.
 echo   正在启动「我的生活中枢」（手机访问模式）
 echo.
 echo   稍后会自动打开配对页面，把上面那条带 token 的地址发到手机上打开即可。
-echo   如果页面提示没有检测到 Tailscale，说明这台电脑还没加入你的 Tailscale 网络。
+echo   手机和电脑要连同一个 WiFi；装了 Tailscale 的话则不受 WiFi 限制。
 echo.
 
 start "" powershell.exe -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "%~dp0windows\start.ps1" -NoBrowser
