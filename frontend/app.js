@@ -1778,6 +1778,7 @@
         <span>解析 <strong>${fmtInt(parsed.parsed || 0)}</strong> 条</span>
         <span>已经记过 <strong>${fmtInt(recon.matched || 0)}</strong> 条</span>
         <span class="is-new">还没记 <strong>${fmtInt(recon.new || 0)}</strong> 条 · ${fmtCNY(recon.new_amount || 0)}</span>
+        ${parsed.review ? `<span class="is-review">需要你判断 <strong>${fmtInt(parsed.review)}</strong> 条</span>` : ''}
         ${parsed.skipped ? `<span class="is-skip">跳过 <strong>${fmtInt(parsed.skipped)}</strong> 条</span>` : ''}
       </div>`;
 
@@ -1793,6 +1794,17 @@
         </div>`).join(''));
     } else {
       parts.push('<div class="today-empty">这份账单里的每一条都已经在账本里了，没有需要补录的。</div>');
+    }
+    // 方向认不出来的行不会自动写入，但也不能让它们悄悄消失——
+    // 那正是「账目对不上却不知道少了哪几笔」的来源。
+    const review = preview.review || [];
+    if (review.length) {
+      parts.push('<h4>需要你判断（不会自动写入）</h4>' + review.map(row => `
+        <div class="statement-row statement-row--review">
+          <span>${escapeHtml(row.occurred_on)}</span>
+          <span class="statement-row__note">${escapeHtml(row.note)} — ${escapeHtml(row.reason)}</span>
+          <em>${fmtCNY(row.amount)}</em>
+        </div>`).join(''));
     }
     if (skipped.length) {
       parts.push('<h4>已跳过</h4>' + skipped.map(item => `

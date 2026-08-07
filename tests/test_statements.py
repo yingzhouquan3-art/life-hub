@@ -70,14 +70,20 @@ class StatementParsingTests(unittest.TestCase):
         result = parse_statement(WECHAT_CSV + "\n\n\n")
         self.assertEqual(result["summary"]["parsed"], 3)
 
-    def test_direction_column_is_required(self):
+    def test_unclear_direction_goes_to_review_not_silently_dropped(self):
+        """方向认不出来的行仍是真实的资金变动，不能当噪声丢掉。
+
+        丢掉的后果是账目对不上，而用户根本不知道少了哪几笔。
+        """
         broken = (
             "交易时间,交易对方,商品,收/支,金额(元)\n"
             "2026-07-02 12:30:00,某商户,东西,,¥10.00\n"
         )
         result = parse_statement("微信支付账单\n" + broken)
         self.assertEqual(result["summary"]["parsed"], 0)
-        self.assertIn("收支方向不明", result["skipped"][0]["reason"])
+        self.assertEqual(result["summary"]["review"], 1)
+        self.assertEqual(result["skipped"], [])
+        self.assertIn("判断", result["review"][0]["reason"])
 
     def test_missing_header_is_reported(self):
         with self.assertRaises(HTTPException):
@@ -90,6 +96,87 @@ class StatementParsingTests(unittest.TestCase):
     def test_unknown_source_is_rejected(self):
         with self.assertRaises(HTTPException):
             parse_statement("交易时间,金额\n2026-07-01,10\n")
+
+
+class RealWorldQuirkTests(unittest.TestCase):
+    """按 china_bean_importers 里对真实账单的处理校准过的行为。
+
+    参考：https://github.com/jiegec/china_bean_importers
+    这些怪癖凭猜想不到，也正是最容易让账目算错的地方。
+    """
+
+    WECHAT_HEADER = "交易时间,交易类型,交易对方,商品,收/支,金额(元),支付方式,当前状态"
+    ALIPAY_HEADER = "交易时间,交易分类,交易对方,商品说明,收/支,金额,交易状态"
+
+    def wechat(self, *rows):
+        return "微信支付账单明细\n" + self.WECHAT_HEADER + "\n" + "\n".join(rows) + "\n"
+
+    def alipay(self, *rows):
+        return ("支付宝（中国）网络技术有限公司 电子客户回单\n"
+                + self.ALIPAY_HEADER + "\n" + "\n".join(rows) + "\n")
+
+    def test_wechat_slash_placeholders_are_not_content(self):
+        """微信把「没有对方 / 没有商品」写成一个斜杠，不该写进备注。"""
+        text = self.wechat("2026-07-03 08:15:00,商户消费,/,/,支出,¥12.00,零钱,支付成功")
+        row = parse_statement(text)["rows"][0]
+        self.assertNotIn("/", row["note"])
+        self.assertEqual(row["counterparty"], "")
+
+    def test_wechat_empty_direction_is_resolved_from_type(self):
+        """微信的信用卡还款、零钱提现这些行，「收/支」列就是一个斜杠。"""
+        text = self.wechat(
+            "2026-07-03 08:15:00,信用卡还款,/,/,/,¥500.00,零钱,还款成功",
+            "2026-07-04 09:00:00,零钱提现,/,/,/,¥200.00,零钱,提现已到账",
+        )
+        result = parse_statement(text)
+        self.assertEqual(result["summary"]["parsed"], 2)
+        for row in result["rows"]:
+            self.assertEqual(row["type"], "expense")
+            self.assertIn("按交易类型", row["note_hint"], "替用户判断的方向必须说出来")
+
+    def test_wechat_partial_refund_is_kept(self):
+        """「已退款(¥5.00)」是部分退款，那笔钱确实花掉了一部分。
+
+        整行丢掉会少记，所以只有「已全额退款」才跳过。
+        """
+        text = self.wechat(
+            "2026-07-06 10:00:00,商户消费,某网店,退货,支出,¥58.00,零钱,已全额退款",
+            "2026-07-07 11:00:00,商户消费,某店,商品,支出,¥50.00,零钱,已退款(¥5.00)",
+        )
+        result = parse_statement(text)
+        self.assertEqual([row["amount"] for row in result["rows"]], [50.0])
+        self.assertEqual(len(result["skipped"]), 1)
+
+    def test_alipay_refund_row_is_not_dropped(self):
+        """支付宝的退款是**单独一行**，原来那笔支出仍留在账单里。
+
+        把这行跳过就变成「支出照算、退款不算」，账目偏高。
+        """
+        text = self.alipay("2026-07-09 14:00:00,退款,某超市,牙膏,其他,25.90,退款成功")
+        result = parse_statement(text)
+        self.assertEqual(result["summary"]["skipped"], 0)
+        self.assertEqual(result["summary"]["review"], 1)
+        self.assertIn("退款", result["review"][0]["reason"])
+
+    def test_alipay_uncounted_direction_goes_to_review(self):
+        """余额宝转入、花呗还款在支付宝里标成「不计收支」，是真实的资金变动。"""
+        text = self.alipay(
+            "2026-07-04 21:10:00,转账,余额宝,余额宝-单次转入,不计收支,500.00,交易成功")
+        result = parse_statement(text)
+        self.assertEqual(result["summary"]["review"], 1)
+        self.assertIn("不计收支", result["review"][0]["reason"])
+
+    def test_alipay_trailer_stops_parsing(self):
+        """明细后面还有分隔线和汇总，继续读会产生一堆无意义的跳过项。"""
+        text = self.alipay(
+            "2026-07-02 09:00:00,交通出行,滴滴出行,快车,支出,18.80,交易成功",
+            "------------------------------------------------------------",
+            "共 1 笔记录",
+            "导出时间：2026-08-01",
+        )
+        result = parse_statement(text)
+        self.assertEqual(result["summary"]["parsed"], 1)
+        self.assertEqual(result["skipped"], [], "分隔线之后不该再产生跳过项")
 
 
 class ReconciliationTests(unittest.TestCase):

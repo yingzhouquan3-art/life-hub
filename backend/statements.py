@@ -10,7 +10,11 @@
 （含「交易时间」与金额列的那一行），再按列名取值。识别不了的行不猜，
 放进 skipped 让用户自己看。
 
-**这些格式是按公开的导出样式写的，没有对着真实账单验证过。**
+列名、状态取值与那些「凭猜想不到」的怪癖，参照 china_bean_importers
+对真实账单的处理校准过：https://github.com/jiegec/china_bean_importers
+（微信的斜杠占位、空的收/支列、支付宝的「不计收支」与尾部分隔线等。）
+
+仍然**没有对你自己的账单验证过**——各人导出的版本可能不同。
 第一次导入请先看预览，确认条数与金额对得上再确认写入。
 """
 from __future__ import annotations
@@ -36,11 +40,9 @@ _COUNTERPARTY_COLUMNS = ("交易对方", "对方账号", "商户名称")
 _ITEM_COLUMNS = ("商品", "商品说明", "商品名称", "交易分类")
 _STATUS_COLUMNS = ("当前状态", "交易状态")
 
-# 这些状态的记录不是一笔真实支出：退款成功、已全额退款、交易关闭等
-_SKIP_STATUS = ("已关闭", "交易关闭", "已退款", "全额退款", "退款成功", "已撤销", "支付失败")
-
 
 def _pick(row: dict, names: Iterable[str]) -> str:
+    """按列名依次取值，取到第一个非空的。列名各版本略有差异，所以不写死列序。"""
     for name in names:
         if name in row and (row[name] or "").strip():
             return row[name].strip()
@@ -86,9 +88,64 @@ def _parse_day(raw: str) -> Optional[str]:
     except ValueError:
         return None
 
+# 微信把「没有对方 / 没有商品」写成一个斜杠，不是真的内容
+_PLACEHOLDER = "/"
+
+# 微信有些交易的「收/支」列就是一个斜杠，方向要从交易类型推。
+# 这些映射来自 china_bean_importers 对真实账单的处理。
+_WECHAT_DIRECTION_BY_TYPE = (
+    ("信用卡还款", "expense"),
+    ("零钱提现", "expense"),
+    ("零钱充值", "income"),
+)
+
+# 支付宝除了收入/支出，还有「不计收支」和「其他」：
+# 余额宝转入转出、花呗还款、退款都落在这里。
+# 它们是真实的资金变动，不能当成噪声丢掉，但方向也不该由系统猜——
+# 一律放进「需要你判断」，由用户在预览里决定。
+_UNCLEAR_DIRECTIONS = ("不计收支", "其他")
+
+# 微信把「这笔退掉了」写成原交易的状态：整笔退掉就等于没花过，可以跳过。
+# 但「已退款(¥5.00)」是部分退款，原来那笔钱确实花掉了一部分，整行丢掉会少记。
+_WECHAT_FULLY_REFUNDED = ("已全额退款", "全额退款")
+
+# 支付宝不一样：退款是**单独一行收入**，原来那笔支出仍然留在账单里。
+# 把这行跳过会变成「支出照算、退款不算」，账目偏高。所以交给用户判断。
+_REFUND_MARKERS = ("退款", "退回")
+
+_CLOSED_STATUS = ("已关闭", "交易关闭", "已撤销", "支付失败", "交易失败")
+
+
+def _clean(value: str) -> str:
+    """把占位斜杠当成空。"""
+    text = (value or "").strip()
+    return "" if text == _PLACEHOLDER else text
+
+
+def _resolve_direction(row: dict, source: str) -> tuple[str, str]:
+    """返回（方向, 说明）。方向为 expense / income / unclear。"""
+    raw = _clean(_pick(row, _DIRECTION_COLUMNS))
+    if "支出" in raw:
+        return "expense", ""
+    if "收入" in raw:
+        return "income", ""
+
+    kind = _pick(row, ("交易类型", "交易分类"))
+    if source == "wechat":
+        for keyword, direction in _WECHAT_DIRECTION_BY_TYPE:
+            if keyword in kind:
+                return direction, f"「收/支」为空，按交易类型「{kind}」判为{'支出' if direction == 'expense' else '收入'}"
+    if raw in _UNCLEAR_DIRECTIONS or not raw:
+        return "unclear", f"账单把它标成「{raw or '空'}」，需要你判断是收入还是支出"
+    return "unclear", f"收支方向「{raw}」认不出来"
+
 
 def parse_statement(text: str, source: Optional[str] = None) -> dict:
-    """把账单原文解析成统一的行。只读，不碰数据库。"""
+    """把账单原文解析成统一的行。只读，不碰数据库。
+
+    列名与状态取值参照 china_bean_importers 对真实账单的处理：
+    https://github.com/jiegec/china_bean_importers
+    """
     if not (text or "").strip():
         raise HTTPException(400, "账单内容为空")
     source = source or detect_source(text)
@@ -100,16 +157,16 @@ def parse_statement(text: str, source: Optional[str] = None) -> dict:
     header = [cell.strip() for cell in rows[header_index]]
 
     parsed: list[dict] = []
+    review: list[dict] = []
     skipped: list[dict] = []
     for line_number, raw_row in enumerate(rows[header_index + 1:], start=header_index + 2):
         if not any((cell or "").strip() for cell in raw_row):
             continue
-        row = {header[i]: (raw_row[i] if i < len(raw_row) else "") for i in range(len(header))}
-
-        status = _pick(row, _STATUS_COLUMNS)
-        if any(word in status for word in _SKIP_STATUS):
-            skipped.append({"line": line_number, "reason": f"状态为「{status}」，不是一笔实际支出"})
-            continue
+        # 支付宝导出的明细后面还有一段分隔线和汇总，遇到就停，
+        # 否则会产生一堆「认不出日期或金额」的噪声。
+        if (raw_row[0] or "").strip().startswith("---"):
+            break
+        row = {header[i]: (raw_row[i] if i < len(header) else "") for i in range(len(header))}
 
         occurred_on = _parse_day(_pick(row, _TIME_COLUMNS))
         amount = _parse_amount(_pick(row, _AMOUNT_COLUMNS))
@@ -117,35 +174,60 @@ def parse_statement(text: str, source: Optional[str] = None) -> dict:
             skipped.append({"line": line_number, "reason": "认不出日期或金额"})
             continue
 
-        direction = _pick(row, _DIRECTION_COLUMNS)
-        if "收入" in direction:
-            kind = "income"
-        elif "支出" in direction:
-            kind = "expense"
-        else:
-            skipped.append({"line": line_number, "reason": f"收支方向不明（「{direction or '空'}」）"})
+        status = _pick(row, _STATUS_COLUMNS)
+        if any(word in status for word in _CLOSED_STATUS):
+            skipped.append({"line": line_number, "reason": f"状态为「{status}」，交易没有真的发生"})
+            continue
+        if source == "wechat" and any(word in status for word in _WECHAT_FULLY_REFUNDED):
+            skipped.append({
+                "line": line_number,
+                "reason": f"状态为「{status}」，整笔已退，这笔钱没有真的花出去",
+            })
             continue
 
-        counterparty = _pick(row, _COUNTERPARTY_COLUMNS)
-        item = _pick(row, _ITEM_COLUMNS)
-        note = " ".join(part for part in (counterparty, item) if part)[:120]
+        direction, note = _resolve_direction(row, source)
 
-        parsed.append({
+        # 支付宝的退款是单独一行，钱是退回来的。方向由用户确认，
+        # 不能当噪声丢掉——丢掉就变成支出照算、退款不算。
+        kind = _pick(row, ("交易类型", "交易分类"))
+        looks_like_refund = any(
+            word in status or word in kind for word in _REFUND_MARKERS
+        )
+        if source == "alipay" and looks_like_refund and direction != "expense":
+            direction = "unclear"
+            note = f"看起来是一笔退款（{status or kind}），退回的钱通常算收入，请确认"
+
+        counterparty = _clean(_pick(row, _COUNTERPARTY_COLUMNS))
+        item = _clean(_pick(row, _ITEM_COLUMNS))
+        summary = " ".join(part for part in (counterparty, item) if part)[:120]
+
+        entry = {
             "occurred_on": occurred_on,
-            "type": kind,
+            "type": "expense" if direction == "expense" else "income",
             "amount": amount,
-            "note": note or SOURCES[source],
+            "note": summary or SOURCES[source],
             "counterparty": counterparty,
+            "status": status,
             "line": line_number,
-        })
+        }
+
+        if direction == "unclear":
+            # 部分退款也走这里：钱确实动了一部分，但金额要由用户核对
+            review.append({**entry, "reason": note})
+            continue
+        if note:
+            entry["note_hint"] = note
+        parsed.append(entry)
 
     return {
         "source": source,
         "source_label": SOURCES[source],
         "rows": parsed,
+        "review": review,
         "skipped": skipped,
         "summary": {
             "parsed": len(parsed),
+            "review": len(review),
             "skipped": len(skipped),
             "expense": round(sum(r["amount"] for r in parsed if r["type"] == "expense"), 2),
             "income": round(sum(r["amount"] for r in parsed if r["type"] == "income"), 2),
