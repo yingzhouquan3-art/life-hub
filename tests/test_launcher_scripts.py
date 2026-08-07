@@ -4,6 +4,7 @@ Windows PowerShell 5.1 读 .ps1 时，没有 BOM 的 UTF-8 会被当成本地代
 中文会变成乱码——注释还好，字符串里出现的乱码可能直接导致语法错误。
 这个坑不会在别的测试里暴露，只会在用户双击时炸，所以在这里守住。
 """
+import codecs
 import re
 import unittest
 
@@ -75,6 +76,45 @@ class LauncherScriptTests(unittest.TestCase):
                     "RunAs", path.read_bytes().decode("utf-8", errors="replace"),
                     f"{path.name} 不应自己做提权",
                 )
+
+    def test_powershell_scripts_with_chinese_have_a_bom(self):
+        """Windows PowerShell 5.1 没有 BOM 就按本地代码页读 .ps1，中文会全乱。
+
+        .cmd 的规矩是「不许有中文」，.ps1 的规矩是「有中文就必须带 BOM」。
+        """
+        for path in sorted((ROOT / "windows").glob("*.ps1")):
+            raw = path.read_bytes()
+            has_chinese = bool(NON_ASCII.search(raw.decode("utf-8", errors="replace")))
+            with self.subTest(script=path.name):
+                if has_chinese:
+                    self.assertTrue(
+                        raw.startswith(codecs.BOM_UTF8),
+                        f"{path.name} 含中文却没有 UTF-8 BOM，PowerShell 会读成乱码",
+                    )
+
+    def test_launchers_start_the_dual_socket_server(self):
+        """必须走 backend.serve：uvicorn --host 只能绑一个地址，
+        绑了局域网就会丢掉回环，桌面入口和配对页都打不开。"""
+        for name in ("windows/start.ps1", "run.sh"):
+            content = (ROOT / name).read_bytes().decode("utf-8-sig")
+            with self.subTest(launcher=name):
+                self.assertIn("backend.serve", content)
+                self.assertNotIn(
+                    "uvicorn backend.main:app", content,
+                    f"{name} 仍在直接调 uvicorn，会丢掉回环监听",
+                )
+
+    def test_stop_script_can_recover_without_the_pid_file(self):
+        """启动记录丢了也要能停掉服务，否则端口一直被占着。"""
+        script = (ROOT / "windows" / "stop.ps1").read_bytes().decode("utf-8-sig")
+        self.assertIn("Get-NetTCPConnection", script, "要能按端口反查进程")
+        self.assertIn("Confirm-Action", script, "结束别的进程前必须先问过用户")
+
+    def test_log_truncation_is_not_fatal(self):
+        """上一个进程还占着日志文件时，不该让整个启动失败。"""
+        script = (ROOT / "windows" / "start.ps1").read_bytes().decode("utf-8-sig")
+        self.assertIn("Clear-LogFile", script)
+        self.assertIn("catch", script)
 
     def test_firewall_script_only_touches_the_app_port(self):
         """这个脚本会改系统设置，范围必须收得很死。"""

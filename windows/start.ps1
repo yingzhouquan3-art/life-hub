@@ -213,36 +213,35 @@ try {
         }
     }
 
-    Set-Content -Path $serverLog -Value "" -Encoding UTF8
-    Set-Content -Path $serverErrorLog -Value "" -Encoding UTF8
+    # 清空日志要容错：上一个服务进程可能还占着这两个文件。
+    # 这时不该让整个启动失败——真正的问题是「已经在跑了」，下面会处理。
+    function Clear-LogFile([string]$path) {
+        try {
+            Set-Content -Path $path -Value "" -Encoding UTF8 -ErrorAction Stop
+        } catch {
+            Write-Host "日志文件被占用，保留原内容继续：$path"
+        }
+    }
+    Clear-LogFile $serverLog
+    Clear-LogFile $serverErrorLog
 
-    # 默认只监听回环，手机连不进来但也没有任何暴露面。
-    # 监听地址由 backend/core/access.py 的 resolve_bind_host 统一决定，
-    # 这里不重复一份判断逻辑。LIFE_HUB_HOST 可以是：
+    # 监听地址由 backend/serve.py 决定：**回环永远监听**，
+    # 需要手机访问时再额外加一个局域网或 Tailscale 地址。
+    # 绑了局域网就丢掉回环的话，桌面入口和配对页都会打不开。
+    # LIFE_HUB_HOST 可以是：
     #   （不设）  只监听本机
     #   auto      有 Tailscale 用 Tailscale，否则用当前局域网
     #   lan       只用当前局域网（手机和电脑连同一个 WiFi）
     #   tailscale 只用 Tailscale
     #   具体地址   直接指定
-    # 任何情况下找不到目标网络都会退回回环；0.0.0.0 会被明确拒绝。
+    # 任何情况下找不到目标网络都会退回只监听本机；0.0.0.0 会被明确拒绝。
     $hostPreference = $env:LIFE_HUB_HOST
-    $resolved = & $venvPython -c "import json,sys;from backend.core.access import resolve_bind_host;
-try:
-    print(json.dumps(resolve_bind_host(sys.argv[1] if len(sys.argv)>1 else '')))
-except ValueError as exc:
-    print(json.dumps({'error': str(exc)}))" $hostPreference
-    $binding = $resolved | ConvertFrom-Json
-    if ($binding.error) { throw $binding.error }
-    $bindHost = $binding.host
-    Write-Host $binding.reason
-    if ($binding.mode -ne "local") {
-        Write-Host "手机配对页面：http://127.0.0.1:8766/pair.html"
-    }
+    if (-not $hostPreference) { $hostPreference = "local" }
 
     $serverArguments = @(
-        "-m", "uvicorn", "backend.main:app",
-        "--host", $bindHost,
-        "--port", "8766"
+        "-m", "backend.serve",
+        "--port", "8766",
+        "--host-preference", $hostPreference
     )
     $serverProcess = Start-Process `
         -FilePath $venvPython `
