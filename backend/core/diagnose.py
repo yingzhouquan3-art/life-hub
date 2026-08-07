@@ -14,6 +14,7 @@ from __future__ import annotations
 import socket
 import subprocess
 import sys
+from pathlib import Path
 from typing import Optional
 
 from backend.core.access import detect_lan_ip, detect_tailscale_ip
@@ -54,16 +55,34 @@ def _powershell(script: str) -> Optional[str]:
 def firewall_allows(port: int) -> Optional[bool]:
     """有没有放行这个端口的入站规则。
 
-    返回 None 表示查不出来（非 Windows，或查询本身失败），
+    走防火墙的 COM 接口枚举规则（约 130 毫秒）。两条弯路都试过，都不行：
+
+    - `Get-NetFirewallPortFilter | Where LocalPort -eq ...`：**结果是错的**。
+      全量枚举出来的筛选器里根本找不到刚建的规则，会给出假阴性，
+      于是页面提示用户去重复添加已经存在的规则。
+    - 先筛入站放行规则再逐条取端口筛选器：结果对，但要 96 秒，页面等不起。
+
+    返回 None 表示查不出来（非 Windows 或查询失败），
     这时不要显示成「被拦截」——那是猜的。
     """
-    # 从端口筛选器出发再取规则，比枚举全部规则再逐条查端口快一个数量级
+    # Direction 1=入站，Action 1=允许，Protocol 6=TCP、256=任意协议。
+    #
+    # LocalPorts='*' 不能一律算放行：很多系统规则是「某个程序的所有端口」，
+    # 那只对那个程序有效。只有当它绑定的正是我们这个 Python 时才算数，
+    # 否则查任何端口都会返回「已放行」——那是比查不出来更糟的假阳性。
+    executable = str(Path(sys.executable)).replace("'", "''")
     output = _powershell(
-        "$rules = Get-NetFirewallPortFilter -ErrorAction SilentlyContinue | "
-        f"Where-Object {{ $_.LocalPort -eq {port} }} | "
-        "Get-NetFirewallRule -ErrorAction SilentlyContinue | Where-Object { "
-        "$_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' -and $_.Action -eq 'Allow' "
-        "}; if ($rules) { 'yes' } else { 'no' }"
+        "$exe = '" + executable + "'; "
+        "$fw = New-Object -ComObject HNetCfg.FwPolicy2; $found = $false; "
+        "foreach ($r in $fw.Rules) { "
+        "  if ($r.Direction -ne 1 -or -not $r.Enabled -or $r.Action -ne 1) { continue } "
+        "  if ($r.Protocol -ne 6 -and $r.Protocol -ne 256) { continue } "
+        "  $ports = $r.LocalPorts; "
+        "  if (-not $ports) { continue } "
+        f"  if (($ports -split ',') -contains '{port}') {{ $found = $true; break }} "
+        "  if ($ports -eq '*' -and $r.ApplicationName -and "
+        "      ($r.ApplicationName -ieq $exe)) { $found = $true; break } "
+        "}; if ($found) { 'yes' } else { 'no' }"
     )
     if output is None:
         return None
