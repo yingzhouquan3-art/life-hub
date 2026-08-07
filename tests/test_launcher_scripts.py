@@ -48,6 +48,34 @@ class LauncherScriptTests(unittest.TestCase):
                         f"{path.name} 引用了不存在的 {referenced}",
                     )
 
+    def test_cmd_files_are_pure_ascii(self):
+        """cmd.exe 按本地代码页读 .cmd，UTF-8 中文会变乱码并被当成命令执行。
+
+        所以 .cmd 里一个中文都不能有——文件名可以是中文，内容不行。
+        中文提示一律放进带 BOM 的 .ps1。
+        """
+        for path in sorted(ROOT.glob("*.cmd")):
+            text = path.read_bytes().decode("utf-8", errors="replace")
+            offenders = NON_ASCII.findall(text)
+            with self.subTest(launcher=path.name):
+                self.assertEqual(
+                    offenders, [],
+                    f"{path.name} 含非 ASCII 字符 {''.join(offenders)[:20]!r}，"
+                    "会被 cmd 读成乱码",
+                )
+
+    def test_elevation_lives_in_powershell_not_cmd(self):
+        """提权要在 PowerShell 里做：中文路径经 cmd 再转一层字符串容易出错。"""
+        script = (ROOT / "windows" / "allow-mobile-access.ps1").read_bytes().decode("utf-8-sig")
+        self.assertIn("-Verb RunAs", script)
+        self.assertIn("$PSCommandPath", script, "重开自己要用 $PSCommandPath，不要拼路径")
+        for path in sorted(ROOT.glob("*.cmd")):
+            with self.subTest(launcher=path.name):
+                self.assertNotIn(
+                    "RunAs", path.read_bytes().decode("utf-8", errors="replace"),
+                    f"{path.name} 不应自己做提权",
+                )
+
     def test_firewall_script_only_touches_the_app_port(self):
         """这个脚本会改系统设置，范围必须收得很死。"""
         script = (ROOT / "windows" / "allow-mobile-access.ps1").read_bytes().decode("utf-8-sig")

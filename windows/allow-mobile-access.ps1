@@ -22,12 +22,25 @@ function Test-Administrator {
 }
 
 if (-not (Test-Administrator)) {
+    # 自己把自己以管理员身份重开一次。
+    # 提权放在这里而不是 .cmd 里：中文路径经过 cmd 再转一层字符串很容易出错，
+    # PowerShell 用 -File 传路径不受代码页影响。
     Write-Host ""
-    Write-Host "  这个脚本需要管理员权限。" -ForegroundColor Yellow
-    Write-Host "  请双击「添加防火墙规则.cmd」，在弹出的提示里点「是」。"
-    Write-Host ""
-    Read-Host "  按回车关闭"
-    exit 1
+    Write-Host "  需要管理员权限，正在申请……请在弹出的系统提示里点「是」。" -ForegroundColor Yellow
+    try {
+        Start-Process powershell.exe -Verb RunAs -ArgumentList @(
+            "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", $PSCommandPath, "-Port", $Port
+        ) | Out-Null
+    } catch {
+        Write-Host ""
+        Write-Host "  没有获得管理员权限，什么都没有改动。" -ForegroundColor Yellow
+        Write-Host "  可以右键这个文件选「以管理员身份运行」，或者手动执行："
+        Write-Host ""
+        Write-Host "    New-NetFirewallRule -DisplayName '我的生活中枢 $Port' -Direction Inbound -Action Allow -Protocol TCP -LocalPort $Port -Profile Private"
+        Write-Host ""
+        Read-Host "  按回车关闭"
+    }
+    exit 0
 }
 
 Write-Host ""
