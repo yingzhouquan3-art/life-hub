@@ -5,6 +5,12 @@
  *
  * 离线优先：写入请求先进本地队列，联网后自动补发。
  * 队列只存「用户已经确认过的写入」，解析这类只读请求不入队。
+ *
+ * 一个绕不过去的限制：Service Worker 与「安装成应用」都要求安全上下文
+ * （https 或 localhost）。手机走 http://192.168.x.x 访问时两者都不可用，
+ * 于是没有离线外壳，也没有安装按钮。队列本身用 localStorage，仍然有效——
+ * 但前提是页面已经打开着。页面没打开时离线是打不开的。
+ * 界面上如实说明这一点，不含糊过去。
  */
 'use strict';
 
@@ -83,6 +89,10 @@ function showBanner(text, kind) {
   if (kind === 'ok') setTimeout(() => banner.classList.add('hidden'), 2600);
 }
 
+/* http 访问时浏览器不把这个来源当成安全上下文，
+ * Service Worker 和「安装成应用」都会被禁用。这不是页面写错了。 */
+const SECURE = window.isSecureContext === true;
+
 function renderConnection() {
   const queued = readQueue().length;
   const parts = [];
@@ -90,11 +100,27 @@ function renderConnection() {
   parts.push(token ? '已配对' : '未配对');
   if (queued) parts.push(`${queued} 条待补发`);
   $('connInfo').textContent = parts.join(' · ');
+  renderInstallHint();
   if (!navigator.onLine) {
     showBanner(queued ? `离线中，${queued} 条记录已暂存` : '离线中，记录会先存在手机上', 'offline');
   } else {
     $('banner').classList.add('hidden');
   }
+}
+
+function renderInstallHint() {
+  const hint = $('installHint');
+  if (!hint) return;
+  if (SECURE) {
+    hint.textContent = '可以在浏览器菜单里选「安装应用」或「添加到主屏幕」，会变成独立图标。';
+    return;
+  }
+  hint.innerHTML =
+    '现在是 <b>http</b> 直连电脑，浏览器不把它当成安全来源，' +
+    '所以<b>没有「安装应用」按钮，也没有离线缓存</b>。<br>' +
+    '仍然可以在浏览器菜单里选「添加到主屏幕 / 添加到桌面」，' +
+    '那会生成一个书签快捷方式——能一键打开，但仍带地址栏。<br>' +
+    '离线时已经打开的页面照样能记，记录会排队；但页面没打开时打不开。';
 }
 
 const FIELD_LABELS = {
@@ -297,6 +323,7 @@ if (!token) {
 refresh();
 flushQueue();
 
-if ('serviceWorker' in navigator) {
+// 只有安全上下文才有 serviceWorker；http 访问时这里整段跳过，属于预期。
+if (SECURE && 'serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').catch(() => { /* 离线外壳不可用不影响记录 */ });
 }
