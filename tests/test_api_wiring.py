@@ -9,6 +9,7 @@ from backend import main
 from backend.api import (
     body,
     capture,
+    categorize,
     fitness,
     goals,
     health_import,
@@ -31,6 +32,7 @@ from backend.api import (
 ROUTERS = {
     "platform": platform.router,
     "capture": capture.router,
+    "categorize": categorize.router,
     "body": body.router,
     "quick": quick.router,
     "inbox": inbox.router,

@@ -245,12 +245,13 @@ async function loadCaptures() {
         <div class="muted">${item.merchant || item.raw_text}</div>
         <div class="muted">${(item.channel_labels || []).join(' + ')} · ${item.occurred_on}</div>
         <div class="row">
-          <button data-confirm="${item.id}">确认记账</button>
+          <button data-confirm="${item.id}" data-category="${(item.suggested && item.suggested.category) || 'other'}">确认记账${
+            item.suggested ? `（${CATEGORY_NAMES[item.suggested.category] || item.suggested.category}）` : ''}</button>
           <button class="ghost" data-dismiss="${item.id}">忽略</button>
         </div>
       </div>`).join('');
     $('captureList').querySelectorAll('[data-confirm]').forEach((button) => {
-      button.onclick = () => resolveCapture(button.dataset.confirm, 'confirm');
+      button.onclick = () => resolveCapture(button.dataset.confirm, 'confirm', button.dataset.category);
     });
     $('captureList').querySelectorAll('[data-dismiss]').forEach((button) => {
       button.onclick = () => resolveCapture(button.dataset.dismiss, 'dismiss');
@@ -260,9 +261,16 @@ async function loadCaptures() {
   }
 }
 
-async function resolveCapture(id, action) {
+/* 分类用后端记住的建议；没有建议才退回「其他」。
+ * 手机上改分类不方便，所以宁可先记下、回电脑再调，也不要卡在选择上。 */
+const CATEGORY_NAMES = {
+  food: '餐饮', transport: '交通', study: '学习', housing: '居住', medical: '医疗',
+  entertainment: '娱乐', social: '社交', digital: '数字服务', other: '其他',
+};
+
+async function resolveCapture(id, action, category) {
   const path = `/api/capture/${id}/${action}`;
-  const body = action === 'confirm' ? { category: 'other' } : {};
+  const body = action === 'confirm' ? { category: category || 'other' } : {};
   if (!navigator.onLine) {
     enqueue({ path, body });
     showBanner('离线，操作已排队', 'offline');

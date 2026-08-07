@@ -27,6 +27,7 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.api import body as body_api
 from backend.api import capture as capture_api
+from backend.api import categorize as categorize_api
 from backend.api import fitness as fitness_api
 from backend.api import goals as goals_api
 from backend.api import health_import as health_import_api
@@ -98,6 +99,7 @@ app.include_router(reflection_api.router)
 app.include_router(goals_api.router)
 app.include_router(views_api.router)
 app.include_router(capture_api.router)
+app.include_router(categorize_api.router)
 app.include_router(quick_api.router)
 app.include_router(inbox_api.router)
 app.include_router(tags_api.router)

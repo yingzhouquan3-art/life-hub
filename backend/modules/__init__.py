@@ -16,6 +16,7 @@ from backend.core import registry
 from backend.modules import (
     body,
     capture,
+    categorize,
     fitness,
     goals,
     inbox,
@@ -42,6 +43,7 @@ MODULES = (
     tags.MODULE,
     # capture 的 pending_captures 外键指向 transactions，必须排在 ledger 之后
     capture.MODULE,
+    categorize.MODULE,
 )
 
 SNAPSHOT_COLUMNS = registry.snapshot_columns(MODULES)

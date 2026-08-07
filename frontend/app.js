@@ -1061,6 +1061,12 @@
     });
   }
 
+  const CAPTURE_CATEGORIES = [
+    ['food', '餐饮'], ['transport', '交通'], ['study', '学习'], ['housing', '居住'],
+    ['medical', '医疗'], ['entertainment', '娱乐'], ['social', '社交'],
+    ['digital', '数字服务'], ['other', '其他'],
+  ];
+
   // ---------- 待确认捕获 ----------
   // 这里显示的都还不是交易：确认之前它们不进入余额、月度和预算的任何一项。
   function renderCapture() {
@@ -1080,15 +1086,14 @@
           <div class="capture-item__main">
             <strong>${fmtCNY(item.amount)}</strong>
             <span>${escapeHtml(item.merchant || item.raw_text)}</span>
-            <small>${escapeHtml((item.channel_labels || []).join(' + '))} · ${escapeHtml(item.occurred_on)}</small>
+            <small>${escapeHtml((item.channel_labels || []).join(' + '))} · ${escapeHtml(item.occurred_on)}${
+              item.suggested ? ` · 按「${escapeHtml(item.suggested.keyword)}」预选` : ''}</small>
           </div>
           <div class="capture-item__actions">
             <select data-capture-category="${item.id}" aria-label="支出分类">
-              <option value="food">餐饮</option><option value="transport">交通</option>
-              <option value="study">学习</option><option value="housing">居住</option>
-              <option value="medical">医疗</option><option value="entertainment">娱乐</option>
-              <option value="social">社交</option><option value="digital">数字服务</option>
-              <option value="other" selected>其他</option>
+              ${CAPTURE_CATEGORIES.map(([key, label]) =>
+                `<option value="${key}"${key === (item.suggested?.category || 'other') ? ' selected' : ''}>${label}</option>`
+              ).join('')}
             </select>
             <button data-capture-confirm="${item.id}">确认记账</button>
             <button class="ghost" data-capture-dismiss="${item.id}">忽略</button>

@@ -21,6 +21,7 @@ from backend.modules.capture import (
     record_capture,
 )
 from backend.modules.capture_rules import describe_rules, parse_notification
+from backend.modules.categorize import learn_category, suggest_category
 from backend.modules.ledger import compute_stats, create_transaction, get_today_overview
 
 router = APIRouter()
@@ -58,6 +59,18 @@ class NotificationIn(BaseModel):
     occurred_at: Optional[str] = None
 
 
+def _with_suggestions(conn, state: dict) -> dict:
+    """给每条待确认捕获附上建议分类。
+
+    只是预选，不代表已经归类；猜不出来就不给，前端退回「其他」。
+    """
+    for item in state.get("pending", []):
+        item["suggested"] = suggest_category(
+            conn, f"{item.get('merchant', '')} {item.get('raw_text', '')}"
+        )
+    return state
+
+
 @router.get("/api/capture/rules")
 def capture_rules():
     """当前生效的解析规则。接通知监听之前先拿真实原文对着调。"""
@@ -90,13 +103,13 @@ def capture_notification(body: NotificationIn):
             occurred_at=body.occurred_at,
         )
         return {"matched": True, "rule": parsed["rule"], **result,
-                "capture_state": get_capture_state(conn)}
+                "capture_state": _with_suggestions(conn, get_capture_state(conn))}
 
 
 @router.get("/api/capture")
 def capture_state(limit: int = 50):
     with db() as conn:
-        return get_capture_state(conn, limit)
+        return _with_suggestions(conn, get_capture_state(conn, limit))
 
 
 @router.post("/api/capture")
@@ -113,7 +126,7 @@ def add_capture(body: CaptureIn):
             occurred_at=body.occurred_at,
             note=body.note,
         )
-        return {**result, "capture_state": get_capture_state(conn)}
+        return {**result, "capture_state": _with_suggestions(conn, get_capture_state(conn))}
 
 
 @router.post("/api/capture/{capture_id}/confirm")
@@ -135,12 +148,21 @@ def confirm_capture(capture_id: int, body: CaptureConfirmIn):
             note=note,
         )
         confirmed = mark_capture_confirmed(conn, capture_id, transaction["id"])
+
+        # 用户确认过的归类才是事实，这时才学。
+        # 有商户名就用商户名当关键字；没有就不学——
+        # 拿整条通知原文当关键字永远不会再命中，只是噪声。
+        learned = None
+        if capture["direction"] == "expense" and body.category and capture["merchant"]:
+            learned = learn_category(conn, capture["merchant"], body.category)
+
         return {
             "capture": confirmed,
             "transaction": transaction,
+            "learned_rule": learned,
             "stats": compute_stats(conn),
             "today": get_today_overview(conn),
-            "capture_state": get_capture_state(conn),
+            "capture_state": _with_suggestions(conn, get_capture_state(conn)),
         }
 
 
@@ -149,7 +171,7 @@ def ignore_capture(capture_id: int):
     with db() as conn:
         return {
             "capture": dismiss_capture(conn, capture_id),
-            "capture_state": get_capture_state(conn),
+            "capture_state": _with_suggestions(conn, get_capture_state(conn)),
         }
 
 
