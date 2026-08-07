@@ -131,8 +131,9 @@ def diagnose_mobile_access(port: int) -> dict:
         })
         if not allowed:
             blocking.append(
-                f"以管理员身份运行 PowerShell，执行下面这条命令放行 {port} 端口。"
-                "这会修改系统防火墙设置，所以需要你自己确认执行。"
+                "双击「添加防火墙规则.cmd」，在弹出的系统提示里点「是」。"
+                "它会修改防火墙设置，所以必须由你确认；也可以自己以管理员身份"
+                "运行下面这条命令。"
             )
 
     category = network_category()
@@ -145,9 +146,9 @@ def diagnose_mobile_access(port: int) -> dict:
         })
         if public:
             blocking.append(
-                "把当前 WiFi 改成「专用网络」：设置 → 网络和 Internet → WLAN → "
-                "点当前网络 → 网络配置文件类型选「专用」。"
-                "只在你信任的网络（家里、自己的手机热点）上这么做。"
+                "把当前网络改成「专用」——上面那条脚本会顺带问你要不要改。"
+                "手动改：设置 → 网络和 Internet → WLAN → 点当前网络 → "
+                "网络配置文件类型选「专用」。只在你信任的网络上这么做。"
             )
 
     return {
