@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from backend.backup import build_snapshot
 from backend.core.access import describe_access, is_loopback, reset_token
+from backend.core.diagnose import diagnose_mobile_access
 from backend.core.config import SNAPSHOT_VERSION
 from backend.core.db import current_path as current_db_path
 from backend.core.db import db
@@ -57,6 +58,16 @@ def access_pairing(request: Request, port: int = 8766):
     """
     _require_loopback(request)
     return describe_access(port)
+
+
+@router.get("/api/access/diagnose")
+def access_diagnose(request: Request, port: int = 8766):
+    """手机连不上时逐条自查：地址、监听、防火墙、网络类型。
+
+    只读，不修改任何系统设置；需要改的地方会给出具体命令由用户执行。
+    """
+    _require_loopback(request)
+    return diagnose_mobile_access(port)
 
 
 @router.post("/api/access/reset-token")

@@ -22,6 +22,17 @@
   ol { padding-left:20px; color:var(--muted); font-size:14px; }
   ol b { color:var(--text); }
   .warn { color:var(--warn); font-size:14px; }
+  .check { display:flex; gap:8px; align-items:baseline; padding:6px 0; font-size:13px; }
+  .check__mark { width:16px; flex:none; text-align:center; }
+  .check.ok .check__mark { color:#4ade80; }
+  .check.bad .check__mark { color:var(--warn); }
+  .check.unknown .check__mark { color:var(--muted); }
+  .check__text b { color:var(--text); font-weight:600; }
+  .check__text span { color:var(--muted); }
+  .fix { margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
+  .fix ol { margin:0; padding-left:20px; }
+  .fix li { margin-bottom:8px; }
+  .ready { color:#4ade80; font-size:14px; }
 </style>
 </head>
 <body>
@@ -32,6 +43,12 @@
   <div class="card">
     <h2>手机端地址</h2>
     <div id="mobile"></div>
+  </div>
+
+  <div class="card">
+    <h2>连不上？先看这里</h2>
+    <div id="diagnose">正在检查…</div>
+    <button id="recheck" class="ghost">重新检查</button>
   </div>
 
   <div class="card">
@@ -102,6 +119,42 @@ function copy(text, button) {
   });
 }
 
+async function diagnose() {
+  $('diagnose').textContent = '正在检查…';
+  try {
+    const port = location.port || '8766';
+    const report = await fetch(`/api/access/diagnose?port=${port}`).then((r) => {
+      if (!r.ok) throw new Error('检查失败，请确认这个页面是在本机浏览器里打开的');
+      return r.json();
+    });
+    const marks = { true: '✓', false: '✗', null: '?' };
+    const classes = { true: 'ok', false: 'bad', null: 'unknown' };
+    const rows = report.checks.map((item) => `
+      <div class="check ${classes[item.ok]}">
+        <span class="check__mark">${marks[item.ok]}</span>
+        <span class="check__text"><b>${item.label}</b><br><span>${item.detail}</span></span>
+      </div>`).join('');
+
+    let fix = '';
+    if (report.ready) {
+      fix = `<div class="fix"><div class="ready">三项都通过了。如果手机还是打不开，多半是这个 WiFi 开了客户端隔离——用手机开热点让电脑连上去即可。</div></div>`;
+    } else {
+      const steps = report.actions.map((action) => `<li>${action}</li>`).join('');
+      const needsFirewall = report.checks.some((c) => c.key === 'firewall' && c.ok === false);
+      fix = `<div class="fix"><ol>${steps}</ol>
+        ${needsFirewall ? `<code id="fwcmd">${report.firewall_command}</code>
+        <button id="copyFw" class="ghost">复制防火墙命令</button>` : ''}
+        <div class="sub" style="margin-top:10px">${report.note}</div></div>`;
+    }
+    $('diagnose').innerHTML = rows + fix;
+    const copyFw = $('copyFw');
+    if (copyFw) copyFw.onclick = () => copy(report.firewall_command, copyFw);
+  } catch (error) {
+    $('diagnose').innerHTML = `<div class="warn">${error.message}</div>`;
+  }
+}
+
+$('recheck').onclick = () => { load(); diagnose(); };
 $('copyToken').onclick = () => pairing && copy(pairing.token, $('copyToken'));
 $('resetToken').onclick = async () => {
   if (!confirm('换新令牌后，已配对的手机会立刻失效，需要重新配对。确定吗？')) return;
@@ -109,6 +162,7 @@ $('resetToken').onclick = async () => {
   load();
 };
 load();
+diagnose();
 </script>
 </body>
 </html>
