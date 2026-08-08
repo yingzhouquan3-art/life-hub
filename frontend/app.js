@@ -139,6 +139,9 @@
     },
     delTx:    (id) => fetch(`${API}/transactions/${id}`, { method: 'DELETE' }).then(r => r.json()),
     previewStatement: (body) => post(`${API}/statements/preview`, body),
+    focusState: () => fetch(`${API}/study/focus`).then(r => r.json()),
+    startFocus: (body) => post(`${API}/study/focus`, body),
+    finishFocus: (id, body) => post(`${API}/study/focus/${id}/finish`, body),
     bodyState: () => fetch(`${API}/body`).then(r => r.json()),
     saveBody: (body) => post(`${API}/body/measurements`, body),
     delBody: async (id) => {
@@ -248,6 +251,7 @@
     goals: { goals: [], summary: {} },
     capture: { pending: [], summary: {}, channel_labels: {} },
     body: { latest: null, changes: {}, recent: [], girth_labels: {} },
+    focus: { running: null, today: {}, recent: [] },
     training: { exercises: [], recent_sessions: [], week: {}, records: [] },
     inbox: { items: [], summary: {}, targets: {} },
     insights: null,
@@ -492,6 +496,21 @@
     todayNextAllowance: $('#today-next-allowance'),
     todayNextBalance: $('#today-next-balance'),
     todayReminders: $('#today-reminders'),
+    focusTime: $('#focus-time'),
+    focusMeta: $('#focus-meta'),
+    focusIdle: $('#focus-idle'),
+    focusRunning: $('#focus-running'),
+    focusSubject: $('#focus-subject'),
+    focusMinutes: $('#focus-minutes'),
+    focusRating: $('#focus-rating'),
+    focusRatingOutput: $('#focus-rating-output'),
+    focusStatus: $('#focus-status'),
+    focusToday: $('#focus-today'),
+    btnFocusStart: $('#btn-focus-start'),
+    btnBreakShort: $('#btn-break-short'),
+    btnBreakLong: $('#btn-break-long'),
+    btnFocusFinish: $('#btn-focus-finish'),
+    btnFocusDrop: $('#btn-focus-drop'),
     bodyWeight: $('#body-weight'),
     bodyWeightDelta: $('#body-weight-delta'),
     bodyWaist: $('#body-waist'),
@@ -1489,6 +1508,106 @@
     return String(error?.message || fallback).replace(/^\d+\s*/, '');
   }
 
+  // ---------- 番茄钟 ----------
+  //
+  // 网页这边只负责显示。剩余时间由后端按「结束时刻 − 当前时间」算，
+  // 每秒本地重算一次也是同样的算法——不做自减，否则标签页切到后台
+  // 被浏览器限流之后，倒计时会越走越慢。
+  let focusTicker = null;
+
+  function formatClock(totalSeconds) {
+    const safe = Math.max(0, Math.round(totalSeconds));
+    const minutes = String(Math.floor(safe / 60)).padStart(2, '0');
+    const seconds = String(safe % 60).padStart(2, '0');
+    return `${minutes}:${seconds}`;
+  }
+
+  function stopFocusTicker() {
+    if (focusTicker) { clearInterval(focusTicker); focusTicker = null; }
+  }
+
+  function renderFocus() {
+    const focus = state.focus || {};
+    const running = focus.running;
+    const today = focus.today || {};
+
+    els.focusToday.textContent = today.count
+      ? `今天完成 ${fmtInt(today.count)} 个，共 ${fmtInt(today.minutes)} 分钟`
+      : '今天还没有完成的番茄。';
+
+    els.focusIdle.hidden = !!running;
+    els.focusRunning.hidden = !running;
+    stopFocusTicker();
+
+    if (!running) {
+      els.focusTime.textContent = formatClock((els.focusMinutes.value || 25) * 60);
+      els.focusMeta.textContent = '还没有开始';
+      els.focusTime.classList.remove('is-done');
+      return;
+    }
+
+    // 用结束时刻算，而不是从后端拿到的秒数往下减
+    const endsAt = new Date(running.ends_at).getTime();
+    const paint = () => {
+      const remaining = (endsAt - Date.now()) / 1000;
+      els.focusTime.textContent = formatClock(remaining);
+      els.focusTime.classList.toggle('is-done', remaining <= 0);
+      els.focusMeta.textContent = remaining > 0
+        ? `${running.kind_label}${running.subject ? ' · ' + running.subject : ''} · 计划 ${fmtInt(running.planned_minutes)} 分钟`
+        : `${running.kind_label}已经到点，结束它来记录`;
+    };
+    paint();
+    focusTicker = setInterval(paint, 1000);
+  }
+
+  async function refreshFocus() {
+    state.focus = await api.focusState();
+    renderFocus();
+  }
+
+  async function onStartFocus(kind, minutes) {
+    if (state.busy) return;
+    state.busy = true;
+    els.focusStatus.hidden = true;
+    try {
+      const response = await api.startFocus({
+        kind,
+        minutes: minutes || Number(els.focusMinutes.value) || null,
+        subject: kind === 'focus' ? els.focusSubject.value.trim() : '',
+      });
+      state.focus = response.focus;
+      renderFocus();
+    } catch (error) {
+      els.focusStatus.textContent = cleanError(error, '没能开始');
+      els.focusStatus.hidden = false;
+    } finally { state.busy = false; }
+  }
+
+  async function onFinishFocus(record) {
+    const running = state.focus?.running;
+    if (state.busy || !running) return;
+    state.busy = true;
+    els.focusStatus.hidden = true;
+    try {
+      const response = await api.finishFocus(running.id, {
+        focus: Number(els.focusRating.value) || 3,
+        record,
+      });
+      state.focus = response.focus;
+      state.study = response.study;
+      const session = response.session;
+      els.focusStatus.textContent = session.recorded_study_session
+        ? `已记下 ${fmtInt(session.actual_minutes)} 分钟`
+        : `没有记入学习时长（${session.actual_minutes < 1 ? '不足一分钟' : '你选择了不记'}）`;
+      els.focusStatus.hidden = false;
+      renderFocus();
+      renderStudy();
+    } catch (error) {
+      els.focusStatus.textContent = cleanError(error, '没能结束');
+      els.focusStatus.hidden = false;
+    } finally { state.busy = false; }
+  }
+
   function renderToday() {
     const today = state.today || {};
     const monthStatusLabels = { unset: '尚未设置月预算', safe: '预算节奏正常', warning: '预算已接近上限', over: '本月已经超出预算' };
@@ -2445,6 +2564,7 @@
     renderGoals();
     renderCapture();
     renderBody();
+    renderFocus();
     renderTraining();
     renderInbox();
     renderInsights();
@@ -2498,10 +2618,11 @@
     state.lifeCalendar = lifeCalendar || { month: '', selected_date: '', days: [], summary: {}, selected: {} };
     state.goals = data.goals || { goals: [], summary: {} };
     state.capture = data.capture || { pending: [], summary: {}, channel_labels: {} };
-    const [bodyState, trainingState, inboxState] = await Promise.all([
-      api.bodyState(), api.trainingState(), api.inboxState(),
+    const [bodyState, trainingState, inboxState, focusState] = await Promise.all([
+      api.bodyState(), api.trainingState(), api.inboxState(), api.focusState(),
     ]);
     state.body = bodyState;
+    state.focus = focusState;
     state.training = trainingState;
     state.inbox = inboxState;
     state.importBatches = data.import_batches || [];
@@ -3978,6 +4099,18 @@
       els.btnQuickParse.disabled = false;
     }
   }
+
+  els.btnFocusStart.addEventListener('click', () => onStartFocus('focus'));
+  els.btnBreakShort.addEventListener('click', () => onStartFocus('short_break', 5));
+  els.btnBreakLong.addEventListener('click', () => onStartFocus('long_break', 15));
+  els.btnFocusFinish.addEventListener('click', () => onFinishFocus(true));
+  els.btnFocusDrop.addEventListener('click', () => onFinishFocus(false));
+  els.focusRating.addEventListener('input', () => {
+    els.focusRatingOutput.textContent = els.focusRating.value;
+  });
+  els.focusMinutes.addEventListener('input', () => {
+    if (!state.focus?.running) renderFocus();
+  });
 
   els.btnSaveBody.addEventListener('click', onSaveBody);
   els.btnAddSet.addEventListener('click', onAddSet);

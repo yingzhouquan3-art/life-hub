@@ -826,6 +826,34 @@
       <div><span class="life-module__eyebrow">GROWTH · STUDY</span><h1>学习与专注</h1><p>只记录已经完成的专注，不用计划数字制造压力。</p></div>
       <button class="module-jump" data-module-jump="overview">返回生活总览 <span>→</span></button>
     </header>
+        <section class="pomodoro">
+      <div class="pomodoro__clock">
+        <div class="pomodoro__time" id="focus-time">25:00</div>
+        <div class="pomodoro__meta" id="focus-meta">还没有开始</div>
+      </div>
+      <div class="pomodoro__controls" id="focus-idle">
+        <label><span>做什么</span><input id="focus-subject" type="text" maxlength="30" placeholder="例如：高等数学"></label>
+        <label><span>时长（分钟）</span><input id="focus-minutes" type="number" min="1" max="240" value="25"></label>
+        <div class="pomodoro__buttons">
+          <button id="btn-focus-start">开始专注</button>
+          <button id="btn-break-short" class="ghost">短休息 5 分钟</button>
+          <button id="btn-break-long" class="ghost">长休息 15 分钟</button>
+        </div>
+      </div>
+      <div class="pomodoro__controls" id="focus-running" hidden>
+        <label><span>专注程度（1–5）</span><input id="focus-rating" type="range" min="1" max="5" value="3"><output id="focus-rating-output">3</output></label>
+        <div class="pomodoro__buttons">
+          <button id="btn-focus-finish">结束并记录</button>
+          <button id="btn-focus-drop" class="ghost">结束但不记</button>
+        </div>
+      </div>
+      <p class="tracker-status" id="focus-status" hidden></p>
+      <p class="tracker-hint">
+        倒计时存在电脑上，不在这个网页里——刷新、换手机看、甚至合上盖子再打开，剩下的时间都还是对的。
+        提前结束按<b>实际专注的分钟数</b>记，不足一分钟不记。休息不计入学习时长。
+      </p>
+      <div class="pomodoro__today" id="focus-today"></div>
+    </section>
     <section class="tracker-kpis tracker-kpis--study">
       <article><span>今天专注</span><strong><span id="study-today-minutes">0</span> 分钟</strong><small id="study-today-count">0 次记录</small></article>
       <article><span>本周累计</span><strong><span id="study-week-minutes">0</span> 分钟</strong><small id="study-week-count">0 次记录</small></article>

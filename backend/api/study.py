@@ -2,13 +2,19 @@
 from __future__ import annotations
 
 from datetime import date
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from backend.core.db import db
-from backend.modules.study import get_study_state, record_study_session
+from backend.modules.study import (
+    finish_focus_session,
+    get_focus_state,
+    get_study_state,
+    record_study_session,
+    start_focus_session,
+)
 from backend.views.overview import get_life_overview
 
 router = APIRouter()
@@ -49,3 +55,44 @@ def delete_study_session(session_id: int):
             raise HTTPException(404, "study session not found")
         conn.execute("DELETE FROM study_sessions WHERE id = ?", (session_id,))
         return {"deleted": session_id, "study": get_study_state(conn), "life": get_life_overview(conn)}
+
+
+class FocusStartIn(BaseModel):
+    kind: Literal["focus", "short_break", "long_break"] = "focus"
+    minutes: Optional[int] = Field(None, ge=1, le=240)
+    subject: str = Field("", max_length=30)
+
+
+class FocusFinishIn(BaseModel):
+    focus: Optional[int] = Field(None, ge=1, le=5)
+    record: bool = True
+
+
+@router.get("/api/study/focus")
+def focus_state():
+    """当前番茄与今日完成情况。剩余秒数由后端按结束时刻算，前端只负责显示。"""
+    with db() as conn:
+        return get_focus_state(conn)
+
+
+@router.post("/api/study/focus")
+def start_focus(body: FocusStartIn):
+    with db() as conn:
+        session = start_focus_session(
+            conn, kind=body.kind, minutes=body.minutes, subject=body.subject,
+        )
+        return {"session": session, "focus": get_focus_state(conn)}
+
+
+@router.post("/api/study/focus/{session_id}/finish")
+def finish_focus(session_id: int, body: FocusFinishIn):
+    """结束一个番茄。按**实际专注分钟数**记学习，不足一分钟不记。"""
+    with db() as conn:
+        session = finish_focus_session(
+            conn, session_id, focus=body.focus, record=body.record,
+        )
+        return {
+            "session": session,
+            "focus": get_focus_state(conn),
+            "study": get_study_state(conn),
+        }

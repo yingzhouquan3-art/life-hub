@@ -1888,6 +1888,27 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
 .tag-row strong { color: var(--gold-bloom); }
 .tag-dead { font-style: normal; color: var(--text-4); }
 .tracker-hint { margin-top: 10px; color: var(--text-4); font-size: 10px; line-height: 1.6; }
+
+/* 番茄钟 */
+.pomodoro { margin-bottom: 16px; padding: 18px; border: 1px solid var(--line-1);
+  border-radius: var(--r-md); background: rgba(255,255,255,.018); }
+.pomodoro__clock { text-align: center; margin-bottom: 14px; }
+.pomodoro__time { font: 700 52px/1 ui-monospace, Consolas, monospace; letter-spacing: .04em;
+  color: var(--text-1); font-variant-numeric: tabular-nums; }
+.pomodoro__time.is-done { color: var(--gold-bloom); }
+.pomodoro__meta { margin-top: 6px; color: var(--text-4); font-size: 11px; }
+.pomodoro__controls { display: grid; gap: 9px; }
+.pomodoro__controls label { display: flex; flex-direction: column; gap: 5px;
+  color: var(--text-3); font-size: 10px; }
+.pomodoro__controls input[type="text"], .pomodoro__controls input[type="number"] {
+  height: 36px; padding: 0 10px; border: 1px solid var(--line-1); border-radius: 7px;
+  background: rgba(255,255,255,.03); color: var(--text-1); }
+.pomodoro__buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.pomodoro__buttons button { flex: 1; min-width: 120px; padding: 10px 14px; border-radius: 8px;
+  font-size: 12px; border: 1px solid rgba(255,209,102,.22); color: var(--gold-bloom);
+  background: rgba(255,209,102,.08); }
+.pomodoro__buttons button.ghost { border-color: var(--line-1); color: var(--text-3); background: transparent; }
+.pomodoro__today { margin-top: 10px; color: var(--text-3); font-size: 11px; }
 .import-preview { margin-top: 10px; max-height: 230px; overflow: auto; }
 .import-table { width: 100%; border-collapse: collapse; font-size: 9.5px; }
 .import-table th { position: sticky; top: 0; padding: 7px; text-align: left; color: var(--text-4); background: #131322; }
