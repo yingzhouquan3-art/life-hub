@@ -1874,6 +1874,22 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
 .statement-stats .is-review strong { color: #9cc3ff; }
 .statement-row--review { color: var(--text-3); }
 .statement-row--review em { color: #9cc3ff; }
+
+/* 本地备份 */
+.backup-panel header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.backup-status { margin-top: 12px; padding: 11px 12px; border-radius: 8px; font-size: 11px;
+  display: grid; gap: 4px; border: 1px solid var(--line-1); background: rgba(255,255,255,.02); }
+.backup-status strong { color: var(--text-1); font-size: 12px; }
+.backup-status span { color: var(--text-3); }
+.backup-status.is-ok { border-color: rgba(74,222,128,.22); background: rgba(74,222,128,.04); }
+.backup-status.is-warn { border-color: rgba(255,209,102,.24); background: rgba(255,209,102,.05); }
+.backup-status.is-bad { border-color: rgba(255,122,122,.28); background: rgba(255,122,122,.05); }
+.backup-problem { margin-top: 4px; color: #ffb3b3; }
+.backup-list { margin-top: 10px; }
+.backup-row { display: flex; justify-content: space-between; padding: 5px 0;
+  border-bottom: 1px solid var(--line-1); font-size: 10.5px; color: var(--text-3); }
+.backup-row:last-child { border-bottom: 0; }
+.backup-row em { font-style: normal; color: var(--text-4); }
 .statement-preview { margin-top: 10px; max-height: 320px; overflow-y: auto; }
 .statement-preview h4 { margin: 12px 0 6px; color: var(--text-4); font-size: 10px; font-weight: 600; letter-spacing: .08em; }
 .statement-preview h4:first-child { margin-top: 0; }

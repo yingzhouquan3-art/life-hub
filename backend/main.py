@@ -51,6 +51,7 @@ from backend.core.access import TOKEN_HEADER, access_allowed
 from backend.core.cloud_access import COOKIE_NAME, cloud_mode_enabled, session_valid
 from backend.core.config import FRONTEND
 from backend.core.db import db
+from backend.core.snapshots import auto_snapshot_if_due, check_integrity
 from backend.modules import MODULES
 
 
@@ -60,7 +61,23 @@ def init_db():
         registry.create_schema(conn, MODULES)
 
 
+def startup_checks():
+    """每次启动做两件与数据安全有关的事，两件都不能让服务起不来。
+
+    先自检再备份：万一库已经坏了，就别用坏的内容去覆盖备份目录。
+    """
+    health = check_integrity()
+    if not health["ok"]:
+        print("[启动] 数据库自检发现问题：", "；".join(health["problems"]), flush=True)
+        print("[启动] 已跳过自动备份，避免用可能损坏的内容顶掉旧快照。", flush=True)
+        return
+    created = auto_snapshot_if_due()
+    if created:
+        print(f"[启动] 已自动备份：{created['name']}", flush=True)
+
+
 init_db()
+startup_checks()
 
 
 # ---------- App ----------

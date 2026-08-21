@@ -18,6 +18,12 @@ from backend.core.diagnose import diagnose_mobile_access
 from backend.core.config import SNAPSHOT_VERSION
 from backend.core.db import current_path as current_db_path
 from backend.core.db import db
+from backend.core.snapshots import (
+    check_integrity,
+    get_snapshot_state,
+    prune_snapshots,
+    take_snapshot,
+)
 from backend.modules import DELETE_ORDER, OPTIONAL_SNAPSHOT_TABLES, SNAPSHOT_COLUMNS
 from backend.modules.capture import get_capture_state
 from backend.modules.fitness import get_fitness_state
@@ -126,6 +132,22 @@ def get_state():
             "transfers": get_recent_transfers(conn),
             "transactions": [dict(t) for t in txs],
         }
+
+
+@router.get("/api/backup/snapshots")
+def backup_snapshots():
+    """本地自动快照的健康度：上次备份多久之前、留了几份、占多大。"""
+    state = get_snapshot_state()
+    state["integrity"] = check_integrity()
+    return state
+
+
+@router.post("/api/backup/snapshots")
+def create_backup_snapshot():
+    """立刻手动留一份。用 sqlite 的 backup API，写入过程中也能拿到一致副本。"""
+    created = take_snapshot("manual")
+    prune_snapshots()
+    return {"created": created, **get_snapshot_state()}
 
 
 @router.get("/api/backup/export")

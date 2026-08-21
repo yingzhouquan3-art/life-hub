@@ -152,6 +152,8 @@
     focusState: () => fetch(`${API}/study/focus`).then(r => r.json()),
     startFocus: (body) => post(`${API}/study/focus`, body),
     finishFocus: (id, body) => post(`${API}/study/focus/${id}/finish`, body),
+    snapshotState: () => fetch(`${API}/backup/snapshots`).then(r => r.json()),
+    takeSnapshot: () => post(`${API}/backup/snapshots`, {}),
     bodyState: () => fetch(`${API}/body`).then(r => r.json()),
     saveBody: (body) => post(`${API}/body/measurements`, body),
     delBody: async (id) => {
@@ -262,6 +264,7 @@
     capture: { pending: [], summary: {}, channel_labels: {} },
     body: { latest: null, changes: {}, recent: [], girth_labels: {} },
     focus: { running: null, today: {}, recent: [] },
+    snapshots: null,
     training: { exercises: [], recent_sessions: [], week: {}, records: [] },
     inbox: { items: [], summary: {}, targets: {} },
     insights: null,
@@ -537,6 +540,10 @@
     btnBreakLong: $('#btn-break-long'),
     btnFocusFinish: $('#btn-focus-finish'),
     btnFocusDrop: $('#btn-focus-drop'),
+    backupStatusBox: $('#backup-status'),
+    backupList: $('#backup-list'),
+    backupNote: $('#backup-note'),
+    btnTakeSnapshot: $('#btn-take-snapshot'),
     bodyWeight: $('#body-weight'),
     bodyWeightDelta: $('#body-weight-delta'),
     bodyWaist: $('#body-waist'),
@@ -1634,6 +1641,60 @@
     } finally { state.busy = false; }
   }
 
+  // ---------- 本地备份 ----------
+  // 全部生活数据都在一个文件里，这是唯一一个「出事就无法挽回」的地方。
+  // 所以「上次备份是多久之前」必须一眼看得见，而不是藏在某个设置里。
+  function renderSnapshots() {
+    const state_ = state.snapshots;
+    if (!state_) { els.backupStatusBox.textContent = '读取中…'; return; }
+
+    const hours = state_.hours_since_last;
+    const megabytes = (state_.total_bytes / 1048576).toFixed(1);
+    let tone = 'ok';
+    let headline;
+    if (hours == null) {
+      tone = 'bad';
+      headline = '还没有任何备份';
+    } else if (hours < 48) {
+      headline = hours < 1 ? '刚刚备份过' : `上次备份在 ${Math.round(hours)} 小时前`;
+    } else {
+      tone = 'warn';
+      headline = `上次备份已经是 ${Math.round(hours / 24)} 天前`;
+    }
+
+    const integrity = state_.integrity;
+    const integrityLine = integrity && !integrity.ok
+      ? `<div class="backup-problem">数据库自检发现问题：${escapeHtml(integrity.problems.join('；'))}</div>`
+      : '';
+
+    els.backupStatusBox.className = `backup-status is-${tone}`;
+    els.backupStatusBox.innerHTML = `
+      <strong>${escapeHtml(headline)}</strong>
+      <span>共 ${fmtInt(state_.count)} 份 · ${megabytes} MB · 每 ${fmtInt(state_.policy.interval_hours)} 小时自动留一份</span>
+      ${integrityLine}`;
+
+    const items = state_.snapshots || [];
+    els.backupList.innerHTML = items.length
+      ? items.slice(0, 6).map(item => `
+        <div class="backup-row">
+          <span>${escapeHtml(item.created_at.replace('T', ' '))}</span>
+          <em>${(item.bytes / 1048576).toFixed(1)} MB</em>
+        </div>`).join('')
+      : '';
+    els.backupNote.textContent = state_.note;
+  }
+
+  async function refreshSnapshots() {
+    try {
+      state.snapshots = await api.snapshotState();
+    } catch (error) {
+      state.snapshots = null;
+      els.backupStatusBox.textContent = cleanError(error, '读不到备份状态');
+      return;
+    }
+    renderSnapshots();
+  }
+
   function renderToday() {
     const today = state.today || {};
     const monthStatusLabels = { unset: '尚未设置月预算', safe: '预算节奏正常', warning: '预算已接近上限', over: '本月已经超出预算' };
@@ -2664,6 +2725,7 @@
     renderCapture();
     renderBody();
     renderFocus();
+    renderSnapshots();
     renderTraining();
     renderInbox();
     renderInsights();
@@ -2723,6 +2785,7 @@
     ]);
     state.body = bodyState;
     state.focus = focusState;
+    refreshSnapshots();
     state.training = trainingState;
     state.inbox = inboxState;
     state.importBatches = data.import_batches || [];
@@ -4220,6 +4283,17 @@
   });
   els.focusMinutes.addEventListener('input', () => {
     if (!state.focus?.running) renderFocus();
+  });
+
+  els.btnTakeSnapshot.addEventListener('click', async () => {
+    if (state.busy) return;
+    state.busy = true;
+    try {
+      state.snapshots = await api.takeSnapshot();
+      renderSnapshots();
+    } catch (error) {
+      els.backupStatusBox.textContent = cleanError(error, '备份失败');
+    } finally { state.busy = false; }
   });
 
   els.btnSaveBody.addEventListener('click', onSaveBody);

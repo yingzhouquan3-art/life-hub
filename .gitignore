@@ -1,5 +1,6 @@
 .venv/
 data/*.db
+data/snapshots/
 data/access-token.txt
 data/*.log
 data/server-process.json
