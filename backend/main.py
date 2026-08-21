@@ -198,6 +198,7 @@ from backend.modules.study import (  # noqa: E402,F401
 from backend.views.calendar import get_life_calendar  # noqa: E402,F401
 from backend.views.overview import get_life_overview  # noqa: E402,F401
 from backend.views.search import search_life  # noqa: E402,F401
+from backend.views.timeline import get_life_timeline  # noqa: E402,F401
 
 
 if __name__ == "__main__":

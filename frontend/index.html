@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=20260821-cloud-1">
+  <link rel="stylesheet" href="./style.css?v=20260821-timeline-1">
 </head>
 <body>
 
@@ -22,6 +22,7 @@
     </button>
     <div class="platform-rail__items">
       <button class="platform-nav is-active" data-module-target="overview" aria-current="page"><span class="platform-nav__icon">⌂</span><span>总览</span></button>
+      <button class="platform-nav" data-module-target="timeline"><span class="platform-nav__icon">迹</span><span>轨迹</span></button>
       <button class="platform-nav" data-module-target="calendar"><span class="platform-nav__icon">历</span><span>日历</span></button>
       <button class="platform-nav" data-module-target="goals"><span class="platform-nav__icon">标</span><span>目标</span></button>
       <button class="platform-nav" data-module-target="finance"><span class="platform-nav__icon">¥</span><span>账本</span></button>
@@ -73,6 +74,36 @@
     <section class="life-actions-panel">
       <header><div><span>下一步</span><h2>今天值得做的小事</h2></div><small>系统只根据记录缺口提示，不做医疗判断</small></header>
       <div class="life-actions" id="life-actions"></div>
+    </section>
+  </main>
+
+  <main class="life-module life-timeline-module" data-module-panel="timeline" hidden>
+    <header class="life-module__head">
+      <div><span class="life-module__eyebrow">LIFE · TIMELINE</span><h1>生活轨迹</h1><p>不需要先想关键词，按时间回看你真实记录过的生活。</p></div>
+      <button class="module-jump" data-module-jump="overview">返回生活总览 <span>→</span></button>
+    </header>
+    <section class="tracker-kpis life-timeline-kpis">
+      <article><span>当前筛选</span><strong id="life-timeline-total">0 条</strong><small>来自各模块的原始记录</small></article>
+      <article><span>已经发生</span><strong id="life-timeline-facts">0 条</strong><small>账目、运动、学习等生活事实</small></article>
+      <article><span>安排与长期条目</span><strong id="life-timeline-arrangements">0 项</strong><small>待办、目标、习惯与固定账单</small></article>
+    </section>
+    <section class="life-timeline-panel">
+      <header class="life-timeline-panel__head">
+        <div><span>筛选视角</span><h2>我的生活记录</h2></div>
+        <small>这里只负责查看；修改与删除请回到来源模块。</small>
+      </header>
+      <div class="life-timeline-filters">
+        <label><span>来源模块</span><select id="life-timeline-module"><option value="">全部模块</option><option value="finance">个人账本</option><option value="fitness">健身</option><option value="body">身体</option><option value="nutrition">饮食</option><option value="recovery">恢复</option><option value="study">学习</option><option value="rhythm">节奏</option><option value="reflection">复盘</option><option value="goals">目标</option></select></label>
+        <label><span>条目类型</span><select id="life-timeline-kind"><option value="">全部类型</option><option value="fact">已经发生</option><option value="arrangement">生活安排</option><option value="reference">长期条目</option></select></label>
+        <label><span>开始日期</span><input id="life-timeline-date-from" type="date"></label>
+        <label><span>结束日期</span><input id="life-timeline-date-to" type="date"></label>
+        <button id="btn-apply-life-timeline">查看</button>
+        <button class="life-timeline-reset" id="btn-reset-life-timeline">清除</button>
+      </div>
+      <div class="life-timeline-result-head"><strong id="life-timeline-summary">正在读取生活轨迹…</strong><small>点击条目可以回到来源模块</small></div>
+      <div class="life-timeline-list" id="life-timeline-list"></div>
+      <button class="life-timeline-more" id="btn-life-timeline-more" hidden>继续加载更早记录</button>
+      <p class="tracker-status" id="life-timeline-status" hidden></p>
     </section>
   </main>
 
@@ -1173,6 +1204,6 @@
   </div>
 
   <script src="./grid.js"></script>
-  <script src="./app.js?v=20260821-cloud-1"></script>
+  <script src="./app.js?v=20260821-timeline-1"></script>
 </body>
 </html>

@@ -12,6 +12,7 @@ from backend.core.db import db
 from backend.views.calendar import get_life_calendar
 from backend.views.overview import get_life_overview
 from backend.views.search import search_life
+from backend.views.timeline import get_life_timeline
 
 router = APIRouter()
 
@@ -37,4 +38,17 @@ def life_search(
     with db() as conn:
         return search_life(
             conn, query=q, module=module, date_from=date_from, date_to=date_to, limit=limit,
+        )
+
+
+@router.get("/api/life-timeline")
+def life_timeline(
+    module: Optional[str] = None, kind: Optional[str] = None,
+    date_from: Optional[str] = None, date_to: Optional[str] = None,
+    offset: int = 0, limit: int = 50,
+):
+    with db() as conn:
+        return get_life_timeline(
+            conn, module=module, kind=kind, date_from=date_from, date_to=date_to,
+            offset=offset, limit=limit,
         )

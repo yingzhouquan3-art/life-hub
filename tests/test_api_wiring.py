@@ -107,7 +107,7 @@ class ApiWiringTests(unittest.TestCase):
             "db", "init_db", "build_snapshot", "add_transaction", "restore_backup",
             "set_semester_settings", "archive_habit", "delete_life_goal",
             "TransactionIn", "SemesterSettingsIn", "RestoreSnapshotIn",
-            "get_life_overview", "get_life_calendar", "search_life",
+            "get_life_overview", "get_life_calendar", "search_life", "get_life_timeline",
         ]:
             self.assertTrue(hasattr(main, name), f"main.{name} 不见了")
 
