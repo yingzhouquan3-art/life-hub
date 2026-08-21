@@ -4,11 +4,12 @@
 """
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 FRONTEND = ROOT / "frontend"
-DATA_DIR = ROOT / "data"
+DATA_DIR = Path(os.environ.get("LIFE_HUB_DATA_DIR", str(ROOT / "data"))).expanduser().resolve()
 
 EXPENSE_CATEGORIES = (
     "food", "transport", "study", "housing", "medical",

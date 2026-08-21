@@ -419,6 +419,7 @@
     goalsList: $('#goals-list'),
 
     btnLifeSearch: $('#btn-life-search'),
+    btnCloudLogout: $('#btn-cloud-logout'),
     lifeSearchOverlay: $('#life-search-overlay'),
     btnCloseLifeSearch: $('#btn-close-life-search'),
     lifeSearchInput: $('#life-search-input'),
@@ -4336,6 +4337,17 @@
   // ============================================
   // 启动
   // ============================================
+  fetch(`${API}/auth/status`).then(r => r.json()).then(auth => {
+    els.btnCloudLogout.hidden = auth.mode !== 'cloud' || !auth.authenticated;
+  }).catch(() => {});
+  els.btnCloudLogout.addEventListener('click', async () => {
+    els.btnCloudLogout.disabled = true;
+    try {
+      await fetch(`${API}/auth/logout`, { method: 'POST' });
+    } finally {
+      location.replace('/login.html');
+    }
+  });
   grid.mount();
   stars.mount();
   loadAndPaint();

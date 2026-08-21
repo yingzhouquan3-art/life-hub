@@ -22,9 +22,10 @@ from __future__ import annotations
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
+from backend.api import auth as auth_api
 from backend.api import body as body_api
 from backend.api import capture as capture_api
 from backend.api import categorize as categorize_api
@@ -47,6 +48,7 @@ from backend.api import training as training_api
 from backend.api import views as views_api
 from backend.core import registry
 from backend.core.access import TOKEN_HEADER, access_allowed
+from backend.core.cloud_access import COOKIE_NAME, cloud_mode_enabled, session_valid
 from backend.core.config import FRONTEND
 from backend.core.db import db
 from backend.modules import MODULES
@@ -75,6 +77,20 @@ async def guard_remote_access(request: Request, call_next):
     静态外壳不设门禁：它不含数据，而且 Service Worker 与 manifest
     的请求带不上自定义头。
     """
+    path = request.url.path
+    if cloud_mode_enabled():
+        public = path in {
+            "/api/health", "/api/auth/status", "/api/auth/login",
+            "/login.html", "/login.css",
+        }
+        authenticated = session_valid(request.cookies.get(COOKIE_NAME))
+        if not public and not authenticated:
+            if path in {"/", "/index.html", "/m", "/m/", "/m/index.html"}:
+                return RedirectResponse(url=f"/login.html?next={path}", status_code=303)
+            if path.startswith("/api/"):
+                return JSONResponse(status_code=401, content={"detail": "登录已失效，请重新登录。"})
+        return await call_next(request)
+
     if not access_allowed(
         request.client.host if request.client else None,
         request.url.path,
@@ -87,6 +103,7 @@ async def guard_remote_access(request: Request, call_next):
     return await call_next(request)
 
 app.include_router(platform_api.router)
+app.include_router(auth_api.router)
 app.include_router(ledger_api.router)
 app.include_router(fitness_api.router)
 app.include_router(training_api.router)

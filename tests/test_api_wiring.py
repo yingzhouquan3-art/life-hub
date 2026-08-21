@@ -7,6 +7,7 @@ import unittest
 
 from backend import main
 from backend.api import (
+    auth,
     body,
     capture,
     categorize,
@@ -30,6 +31,7 @@ from backend.api import (
 )
 
 ROUTERS = {
+    "auth": auth.router,
     "platform": platform.router,
     "capture": capture.router,
     "categorize": categorize.router,

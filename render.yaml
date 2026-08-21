@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: my-life-hub
+    runtime: docker
+    plan: starter
+    region: singapore
+    autoDeployTrigger: commit
+    healthCheckPath: /api/health
+    envVars:
+      - key: LIFE_HUB_MODE
+        value: cloud
+      - key: LIFE_HUB_DATA_DIR
+        value: /data
+      - key: LIFE_HUB_PASSWORD
+        sync: false
+    disk:
+      name: life-hub-data
+      mountPath: /data
+      sizeGB: 1

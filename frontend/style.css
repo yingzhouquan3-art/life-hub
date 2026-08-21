@@ -147,6 +147,14 @@ h1, h2, h3 { margin: 0; font-weight: 600; }
 .global-search-trigger:hover { color: var(--gold-core); border-color: rgba(255,209,102,.28); }
 .global-search-trigger strong { font-size: 11px; font-weight: 500; }
 .global-search-trigger kbd { padding: 2px 5px; border: 1px solid var(--line-1); border-radius: 5px; color: var(--text-4); font: 8px var(--ff-mono); }
+.cloud-session-control {
+  position: fixed; z-index: 110; top: 17px; right: 150px; height: 36px; padding: 0 11px;
+  display: flex; align-items: center; gap: 7px; border: 1px solid rgba(126,209,255,.18); border-radius: 999px;
+  color: #9edfff; background: rgba(10,10,18,.82); backdrop-filter: blur(16px);
+}
+.cloud-session-control[hidden] { display: none; }
+.cloud-session-control:hover { border-color: rgba(126,209,255,.4); color: #d5f3ff; }
+.cloud-session-control strong { font-size: 10px; font-weight: 500; }
 
 .life-search-overlay {
   position: fixed; inset: 0; z-index: 100; padding: 7vh 18px;
@@ -2363,6 +2371,8 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
   .platform-nav { min-height: 52px; }
   .platform-nav.is-active::before { left: 22%; right: 22%; top: -6px; bottom: auto; width: auto; height: 2px; }
   .global-search-trigger { top: 10px; right: 10px; }
+  .cloud-session-control { top: 10px; right: 58px; }
+  .cloud-session-control strong { display: none; }
   .global-search-trigger strong, .global-search-trigger kbd { display: none; }
   .layout, .life-module { width: 100%; margin-left: 0; height: calc(100dvh - 66px); }
   .life-module { padding: 24px 16px 32px; }
