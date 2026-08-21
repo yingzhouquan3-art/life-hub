@@ -34,11 +34,11 @@
   const RHYTHM_CATEGORY_LABELS = { personal: '个人', study: '学习', health: '身体', finance: '财务', other: '其他' };
   const TASK_PRIORITY_LABELS = { low: '低', normal: '普通', high: '高' };
   const LIFE_MODULE_LABELS = {
-    finance: '账', fitness: '动', nutrition: '食', recovery: '眠',
+    finance: '账', fitness: '动', body: '秤', nutrition: '食', recovery: '眠',
     study: '学', rhythm: '律', reflection: '记', goals: '标',
   };
   const LIFE_MODULE_NAMES = {
-    finance: '个人账本', fitness: '健身', nutrition: '饮食', recovery: '恢复',
+    finance: '个人账本', fitness: '健身', body: '身体', nutrition: '饮食', recovery: '恢复',
     study: '学习', rhythm: '节奏', reflection: '复盘', goals: '目标',
   };
   const LIFE_SEARCH_KIND_LABELS = { fact: '生活事实', arrangement: '生活安排', reference: '长期条目' };
@@ -97,6 +97,16 @@
         if (value !== '' && value != null) query.set(key, value);
       });
       return fetch(`${API}/life-search?${query}`).then(async r => {
+        if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
+        return r.json();
+      });
+    },
+    lifeTimeline: (params = {}) => {
+      const query = new URLSearchParams();
+      Object.entries(params).forEach(([key, value]) => {
+        if (value !== '' && value != null) query.set(key, value);
+      });
+      return fetch(`${API}/life-timeline?${query}`).then(async r => {
         if (!r.ok) throw new Error(`${r.status} ${await r.text()}`);
         return r.json();
       });
@@ -259,6 +269,7 @@
     tagOverview: null,
     healthImportPreview: null,
     lifeSearch: { query: '', results: [], summary: { total: 0 }, truncated: false },
+    lifeTimeline: null,
     quickPreview: null,
     annualReport: null,
     searchResult: { transactions: [], summary: { count: 0, income: 0, expense: 0, net: 0 } },
@@ -431,6 +442,20 @@
     lifeSearchSummary: $('#life-search-summary'),
     lifeSearchResults: $('#life-search-results'),
     lifeSearchStatus: $('#life-search-status'),
+
+    lifeTimelineTotal: $('#life-timeline-total'),
+    lifeTimelineFacts: $('#life-timeline-facts'),
+    lifeTimelineArrangements: $('#life-timeline-arrangements'),
+    lifeTimelineModule: $('#life-timeline-module'),
+    lifeTimelineKind: $('#life-timeline-kind'),
+    lifeTimelineDateFrom: $('#life-timeline-date-from'),
+    lifeTimelineDateTo: $('#life-timeline-date-to'),
+    btnApplyLifeTimeline: $('#btn-apply-life-timeline'),
+    btnResetLifeTimeline: $('#btn-reset-life-timeline'),
+    lifeTimelineSummary: $('#life-timeline-summary'),
+    lifeTimelineList: $('#life-timeline-list'),
+    btnLifeTimelineMore: $('#btn-life-timeline-more'),
+    lifeTimelineStatus: $('#life-timeline-status'),
 
     overlay: $('#overlay'),
     btnSettings: $('#btn-settings'),
@@ -2559,6 +2584,79 @@
     }
   }
 
+  function renderLifeTimeline() {
+    const timeline = state.lifeTimeline;
+    if (!timeline) {
+      els.lifeTimelineTotal.textContent = '—';
+      els.lifeTimelineFacts.textContent = '—';
+      els.lifeTimelineArrangements.textContent = '—';
+      els.lifeTimelineSummary.textContent = '正在读取生活轨迹…';
+      els.lifeTimelineList.innerHTML = '<div class="life-timeline-empty">正在汇总各模块中的真实记录…</div>';
+      els.btnLifeTimelineMore.hidden = true;
+      return;
+    }
+    const summary = timeline.summary || {};
+    const byKind = summary.by_kind || {};
+    const results = timeline.results || [];
+    els.lifeTimelineTotal.textContent = `${fmtInt(summary.total)} 条`;
+    els.lifeTimelineFacts.textContent = `${fmtInt(byKind.fact)} 条`;
+    els.lifeTimelineArrangements.textContent = `${fmtInt((byKind.arrangement || 0) + (byKind.reference || 0))} 项`;
+    els.lifeTimelineSummary.textContent = `共 ${fmtInt(summary.total)} 条 · 已显示 ${fmtInt(results.length)} 条`;
+
+    const groups = [];
+    results.forEach(item => {
+      const label = item.date || '长期条目';
+      let group = groups[groups.length - 1];
+      if (!group || group.label !== label) {
+        group = { label, items: [] };
+        groups.push(group);
+      }
+      group.items.push(item);
+    });
+    els.lifeTimelineList.innerHTML = groups.length ? groups.map(group => `
+      <section class="life-timeline-day">
+        <header><time>${escapeHtml(group.label)}</time><span>${group.items.length} 条</span></header>
+        <div>${group.items.map(item => `
+          <button class="life-timeline-item" data-life-timeline-module="${escapeHtml(item.module)}">
+            <span class="life-timeline-item__rail"><i>${escapeHtml(LIFE_MODULE_LABELS[item.module] || '生')}</i></span>
+            <span class="life-timeline-item__body"><strong>${escapeHtml(item.title)}</strong><small>${escapeHtml(item.detail)}</small></span>
+            <span class="life-timeline-item__meta">${escapeHtml(LIFE_MODULE_NAMES[item.module] || item.module)}<br>${escapeHtml(LIFE_SEARCH_KIND_LABELS[item.kind] || item.kind)} →</span>
+          </button>`).join('')}</div>
+      </section>`).join('') : '<div class="life-timeline-empty">这个筛选范围内还没有记录。空白只表示没有保存数据，不代表什么也没发生。</div>';
+    els.lifeTimelineList.querySelectorAll('[data-life-timeline-module]').forEach(button => {
+      button.addEventListener('click', () => switchModule(button.dataset.lifeTimelineModule));
+    });
+    els.btnLifeTimelineMore.hidden = !timeline.has_more;
+  }
+
+  async function loadLifeTimeline(append = false) {
+    els.lifeTimelineStatus.hidden = true;
+    els.btnApplyLifeTimeline.disabled = true;
+    els.btnLifeTimelineMore.disabled = true;
+    try {
+      const previous = state.lifeTimeline;
+      const response = await api.lifeTimeline({
+        module: els.lifeTimelineModule.value,
+        kind: els.lifeTimelineKind.value,
+        date_from: els.lifeTimelineDateFrom.value,
+        date_to: els.lifeTimelineDateTo.value,
+        offset: append ? (previous?.next_offset || 0) : 0,
+        limit: 30,
+      });
+      if (append && previous) {
+        response.results = [...(previous.results || []), ...(response.results || [])];
+      }
+      state.lifeTimeline = response;
+      renderLifeTimeline();
+    } catch (error) {
+      els.lifeTimelineStatus.textContent = error.message || '生活轨迹读取失败，原数据没有改变。';
+      els.lifeTimelineStatus.hidden = false;
+    } finally {
+      els.btnApplyLifeTimeline.disabled = false;
+      els.btnLifeTimelineMore.disabled = false;
+    }
+  }
+
   function renderAll() {
     renderLifeOverview();
     renderLifeCalendar();
@@ -2571,6 +2669,7 @@
     renderInsights();
     renderHealthImport();
     renderLifeSearch();
+    renderLifeTimeline();
     renderFitness();
     renderNutrition();
     renderRecovery();
@@ -2735,7 +2834,7 @@
 
   function switchModule(module) {
     // 白名单要和 index.html 里的 data-module-panel 一一对应，漏一个那个导航就点不动
-    const MODULES = ['overview', 'calendar', 'goals', 'finance', 'fitness', 'body',
+    const MODULES = ['overview', 'timeline', 'calendar', 'goals', 'finance', 'fitness', 'body',
                      'nutrition', 'recovery', 'study', 'rhythm', 'reflection', 'inbox', 'insights'];
     if (!MODULES.includes(module)) return;
     state.currentModule = module;
@@ -2758,6 +2857,7 @@
       grid.pause();
     }
     if (module === 'calendar') loadLifeCalendar(state.lifeCalendar?.month, state.lifeCalendar?.selected_date);
+    if (module === 'timeline' && !state.lifeTimeline) loadLifeTimeline();
   }
   els.moduleNav.forEach(button => button.addEventListener('click', () => switchModule(button.dataset.moduleTarget)));
   els.moduleJumps.forEach(button => button.addEventListener('click', () => switchModule(button.dataset.moduleJump)));
@@ -2773,6 +2873,15 @@
     els.lifeSearchDateTo.value = '';
     if (els.lifeSearchInput.value.trim()) runLifeSearch();
   });
+  els.btnApplyLifeTimeline.addEventListener('click', () => loadLifeTimeline());
+  els.btnResetLifeTimeline.addEventListener('click', () => {
+    els.lifeTimelineModule.value = '';
+    els.lifeTimelineKind.value = '';
+    els.lifeTimelineDateFrom.value = '';
+    els.lifeTimelineDateTo.value = '';
+    loadLifeTimeline();
+  });
+  els.btnLifeTimelineMore.addEventListener('click', () => loadLifeTimeline(true));
   els.lifeSearchInput.addEventListener('keydown', event => {
     if (event.key === 'Enter') { event.preventDefault(); runLifeSearch(); }
   });
