@@ -3548,13 +3548,44 @@
   els.lifeSearchOverlay.addEventListener('click', event => {
     if (event.target === els.lifeSearchOverlay) closeLifeSearch();
   });
+  // 正在输入的时候不抢键：单字母快捷键最容易毁在这一点上。
+  function isTyping(target) {
+    if (!target) return false;
+    if (target.isContentEditable) return true;
+    return ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+  }
+
+  /** 跳到「记一笔」并把光标放进去。每天用得最多的动作，值得一个键。 */
+  function jumpToQuickEntry() {
+    // 这两个切换是同步取消隐藏的，元素当场就可聚焦。
+    // 不要挪进 requestAnimationFrame：标签页不在前台时那个回调根本不触发，
+    // 键按了却没有光标，用户只会以为快捷键坏了。
+    switchModule('finance');
+    switchStageView('today');
+    els.quickEntryInput.focus();
+    els.quickEntryInput.select();
+  }
+
   document.addEventListener('keydown', event => {
+    const typing = isTyping(event.target);
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
       event.preventDefault();
       if (els.lifeSearchOverlay.hidden) openLifeSearch();
       else closeLifeSearch();
-    } else if (event.key === 'Escape' && !els.lifeSearchOverlay.hidden) {
+      return;
+    }
+    if (event.key === 'Escape' && !els.lifeSearchOverlay.hidden) {
       closeLifeSearch();
+      return;
+    }
+    if (typing || event.ctrlKey || event.metaKey || event.altKey) return;
+    // 单键快捷方式，仿 GitHub：手不用离开键盘就能记一笔或搜东西
+    if (event.key === 'n' || event.key === 'N') {
+      event.preventDefault();
+      jumpToQuickEntry();
+    } else if (event.key === '/') {
+      event.preventDefault();
+      openLifeSearch();
     }
   });
 

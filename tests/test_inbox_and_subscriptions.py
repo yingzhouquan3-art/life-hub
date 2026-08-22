@@ -228,6 +228,31 @@ class FrontendWiringTests(unittest.TestCase):
         self.assertIn("openTxEditor", js)
         self.assertIn("patchTx", js)
 
+    def test_single_key_shortcuts_do_not_steal_keys_while_typing(self):
+        """单字母快捷键最容易毁在这一点上：正在写备注时按 n 却跳走了。
+
+        也不能靠 requestAnimationFrame 去聚焦——标签页不在前台时那个回调
+        根本不触发，键按了没有光标，用户只会以为快捷键坏了。
+        """
+        root = Path(__file__).resolve().parents[1] / "frontend"
+        js = (root / "app.js").read_text(encoding="utf-8")
+        self.assertIn("function isTyping", js)
+        self.assertIn("jumpToQuickEntry", js)
+        start = js.index("function jumpToQuickEntry")
+        end = js.index(chr(10) + "  }", start)
+        # 去掉注释再断言：函数里正解释着「为什么不用 rAF」，
+        # 直接搜关键字会把那句解释当成违规命中。
+        body = re.sub(r"//.*", "", js[start:end])
+        self.assertNotIn("requestAnimationFrame", body)
+        self.assertIn("focus()", body)
+
+    def test_the_shortcut_is_discoverable(self):
+        """没人知道的快捷键等于不存在。"""
+        root = Path(__file__).resolve().parents[1] / "frontend"
+        html = (root / "index.html").read_text(encoding="utf-8")
+        self.assertIn("kbd-hint", html)
+        self.assertIn("<kbd>N</kbd>", html)
+
     def test_panels_with_a_backend_are_actually_rendered(self):
         """有接口没入口是这个项目的老毛病，补一条就在这里记一条。"""
         root = Path(__file__).resolve().parents[1] / "frontend"

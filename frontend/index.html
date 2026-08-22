@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=20260822-edit-2">
+  <link rel="stylesheet" href="./style.css?v=20260822-keys-2">
 </head>
 <body>
 
@@ -384,7 +384,10 @@
         </section>
         <div class="today-grid">
           <section class="dashboard-panel quick-entry-panel">
-            <header><div><h2>一句话记录</h2><p>自动判断属于哪个模块，先预览、可改判，确认后才写入</p></div></header>
+            <header>
+              <div><h2>一句话记录</h2><p>自动判断属于哪个模块，先预览、可改判，确认后才写入</p></div>
+              <span class="kbd-hint">按 <kbd>N</kbd> 随时跳到这里 · <kbd>/</kbd> 搜索</span>
+            </header>
             <div class="quick-entry-box">
               <input id="quick-entry-input" type="text" maxlength="200" placeholder="例如：午饭 16.5 支付宝 / 跑步 30 分钟 强度 6 / 睡了 7 小时">
               <button id="btn-quick-parse">解析</button>
@@ -1318,6 +1321,6 @@
   </div>
 
   <script src="./grid.js"></script>
-  <script src="./app.js?v=20260822-edit-2"></script>
+  <script src="./app.js?v=20260822-keys-2"></script>
 </body>
 </html>

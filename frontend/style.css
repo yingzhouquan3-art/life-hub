@@ -2137,6 +2137,14 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
 .rules-panel { grid-column: 1 / -1; }
 .ingest-panel { grid-column: 1 / -1; }
 .demo-panel { grid-column: 1 / -1; }
+.kbd-hint { color: var(--text-4); font-size: 9.5px; white-space: nowrap; }
+.kbd-hint kbd {
+  display: inline-block; min-width: 15px; padding: 1px 4px; margin: 0 1px;
+  border: 1px solid var(--line-1); border-radius: 4px;
+  background: rgba(255,255,255,.04); color: var(--text-3);
+  font: inherit; font-size: 9px; text-align: center;
+}
+.quick-entry-panel header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .demo-status { color: var(--text-3); font-size: 11px; white-space: nowrap; }
 .demo-actions { display: flex; gap: 7px; margin-bottom: 8px; }
 .demo-actions button {
