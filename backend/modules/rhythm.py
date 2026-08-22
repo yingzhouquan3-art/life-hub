@@ -95,11 +95,18 @@ def create_personal_task(
     return dict(conn.execute("SELECT * FROM personal_tasks WHERE id = ?", (cur.lastrowid,)).fetchone())
 
 
-def toggle_personal_task(conn, task_id: int) -> dict:
+def toggle_personal_task(conn, task_id: int, desired: Optional[str] = None) -> dict:
+    """完成或取消完成一项待办。
+
+    desired 留空是「切换」；传 'done' / 'pending' 就是「设成这样」，
+    重复执行结果一样。理由和习惯打卡相同，见 toggle_habit_checkin。
+    """
     row = conn.execute("SELECT * FROM personal_tasks WHERE id = ?", (task_id,)).fetchone()
     if not row:
         raise HTTPException(404, "task not found")
-    next_status = "done" if row["status"] == "pending" else "pending"
+    if desired is not None and desired not in ("done", "pending"):
+        raise HTTPException(400, f"未知的待办状态：{desired}")
+    next_status = desired or ("done" if row["status"] == "pending" else "pending")
     completed_at = datetime.now().isoformat() if next_status == "done" else None
     conn.execute(
         "UPDATE personal_tasks SET status = ?, completed_at = ? WHERE id = ?",
@@ -121,7 +128,17 @@ def create_habit(conn, *, name: str, category: str = "personal") -> dict:
     return dict(conn.execute("SELECT * FROM habits WHERE id = ?", (cur.lastrowid,)).fetchone())
 
 
-def toggle_habit_checkin(conn, habit_id: int, occurred_on: str) -> dict:
+def toggle_habit_checkin(conn, habit_id: int, occurred_on: str,
+                         desired: Optional[bool] = None) -> dict:
+    """给某一天打卡或取消打卡。
+
+    desired 留空是「切换」，桌面端点一下就是这个意思。
+    传了 True / False 就是「设成这样」，重复执行结果一样。
+
+    手机端离线时会把操作排进队列，过一会儿才补发。那种场景下必须用后者：
+    你在没网的地方打了卡，回家又在电脑上打了一次，补发的如果是「切换」，
+    就会把已经打好的卡**取消掉**——用户完全看不出发生了什么。
+    """
     date.fromisoformat(occurred_on)
     habit = conn.execute("SELECT * FROM habits WHERE id = ? AND is_active = 1", (habit_id,)).fetchone()
     if not habit:
@@ -130,16 +147,15 @@ def toggle_habit_checkin(conn, habit_id: int, occurred_on: str) -> dict:
         "SELECT id FROM habit_checkins WHERE habit_id = ? AND occurred_on = ?",
         (habit_id, occurred_on),
     ).fetchone()
-    if existing:
+    checked = not existing if desired is None else desired
+    if existing and not checked:
         conn.execute("DELETE FROM habit_checkins WHERE id = ?", (existing["id"],))
-        checked = False
-    else:
+    elif not existing and checked:
         conn.execute(
             "INSERT INTO habit_checkins (habit_id, occurred_on, created_at) VALUES (?, ?, ?)",
             (habit_id, occurred_on, datetime.now().isoformat()),
         )
-        checked = True
-    return {"habit_id": habit_id, "occurred_on": occurred_on, "checked": checked}
+    return {"habit_id": habit_id, "occurred_on": occurred_on, "checked": bool(checked)}
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS personal_tasks (

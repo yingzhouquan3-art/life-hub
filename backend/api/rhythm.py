@@ -35,6 +35,13 @@ class HabitIn(BaseModel):
 
 class HabitCheckinIn(BaseModel):
     occurred_on: Optional[str] = None
+    # 留空是「切换」；手机端离线补发时必须显式给出想要的状态，
+    # 否则一条迟到的切换会把已经打好的卡取消掉。
+    desired: Optional[bool] = None
+
+
+class TaskToggleIn(BaseModel):
+    desired: Optional[Literal["done", "pending"]] = None
 
 
 @router.get("/api/rhythm")
@@ -58,9 +65,9 @@ def add_personal_task(body: PersonalTaskIn):
 
 
 @router.post("/api/tasks/{task_id}/toggle")
-def toggle_task(task_id: int):
+def toggle_task(task_id: int, body: Optional[TaskToggleIn] = None):
     with db() as conn:
-        task = toggle_personal_task(conn, task_id)
+        task = toggle_personal_task(conn, task_id, body.desired if body else None)
         return {"task": task, "rhythm": get_rhythm_state(conn), "life": get_life_overview(conn)}
 
 
@@ -83,7 +90,8 @@ def add_habit(body: HabitIn):
 @router.post("/api/habits/{habit_id}/toggle")
 def toggle_habit(habit_id: int, body: HabitCheckinIn):
     with db() as conn:
-        result = toggle_habit_checkin(conn, habit_id, body.occurred_on or date.today().isoformat())
+        result = toggle_habit_checkin(
+            conn, habit_id, body.occurred_on or date.today().isoformat(), body.desired)
         return {**result, "rhythm": get_rhythm_state(conn), "life": get_life_overview(conn)}
 
 

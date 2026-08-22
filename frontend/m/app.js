@@ -1,6 +1,6 @@
 /* 生活中枢 · 手机端
  *
- * 三件事：一句话记录、待确认捕获、今日已记内容。
+ * 四件事：一句话记录、今天要做的（打卡与待办）、待确认捕获、今日已记内容。
  * 报表、复盘、人生方格留在桌面端——手机上只解决「来不及记」。
  *
  * 离线优先：写入请求先进本地队列，联网后自动补发。
@@ -230,6 +230,111 @@ function resetForm() {
   $('preview').classList.add('hidden');
 }
 
+/* ---------- 今天要做的 ----------
+ *
+ * 习惯打卡和待办本来只能在电脑上操作，但「打卡」天然是人在哪就在哪做的事，
+ * 回到电脑前再补，多半就不补了。
+ *
+ * 离线时排进队列的**不是「切换」而是「设成某个状态」**：你在没网的地方
+ * 打了卡，回家又在电脑上打了一次，如果补发的是切换，就会把已经打好的卡
+ * 取消掉，而且你完全看不出发生了什么。
+ */
+let rhythm = null;
+
+function tickRow({ id, kind, name, meta, on, late }) {
+  return `<button class="tick${on ? ' on' : ''}${late ? ' late' : ''}"
+    data-tick="${kind}:${id}" data-on="${on ? '1' : '0'}">
+    <span class="box">✓</span>
+    <span class="name">${escapeText(name)}</span>
+    ${meta ? `<span class="meta">${escapeText(meta)}</span>` : ''}
+  </button>`;
+}
+
+function escapeText(value) {
+  return String(value == null ? '' : value).replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
+async function loadRhythm() {
+  try {
+    rhythm = await api('/api/rhythm');
+  } catch (error) {
+    $('rhythmList').innerHTML = `<div class="warn">${escapeText(error.message)}</div>`;
+    return;
+  }
+  const today = rhythm.date;
+  const habits = rhythm.habits || [];
+  const tasks = rhythm.tasks || [];
+  const overdue = tasks.filter((item) => item.status === 'pending' && item.due_on < today);
+  const todayTasks = tasks.filter((item) => item.due_on === today);
+
+  const groups = [];
+  if (overdue.length) {
+    groups.push(`<div class="group"><h3>逾期 ${overdue.length} 项</h3>${
+      overdue.map((item) => tickRow({
+        id: item.id, kind: 'task', name: item.title, on: false, late: true,
+        meta: item.due_on,
+      })).join('')}</div>`);
+  }
+  if (todayTasks.length) {
+    groups.push(`<div class="group"><h3>今天的待办</h3>${
+      todayTasks.map((item) => tickRow({
+        id: item.id, kind: 'task', name: item.title, on: item.status === 'done',
+        meta: item.priority === 'high' ? '重要' : '',
+      })).join('')}</div>`);
+  }
+  if (habits.length) {
+    groups.push(`<div class="group"><h3>每日习惯 ${
+      habits.filter((h) => h.checked_today).length}/${habits.length}</h3>${
+      habits.map((item) => tickRow({
+        id: item.id, kind: 'habit', name: item.name, on: item.checked_today,
+        meta: item.streak ? `连续 ${item.streak} 天` : '',
+      })).join('')}</div>`);
+  }
+
+  $('rhythmList').innerHTML = groups.length ? groups.join('') : `<div class="muted">
+    今天没有待办，也还没有每日习惯。<br>在电脑上添加之后，这里就能直接点。
+  </div>`;
+
+  $('rhythmList').querySelectorAll('[data-tick]').forEach((button) => {
+    button.onclick = () => {
+      const [kind, id] = button.dataset.tick.split(':');
+      flipTick(button, kind, Number(id), button.dataset.on !== '1');
+    };
+  });
+}
+
+/** 先把界面点亮再发请求：站在路口点一下要立刻有反应。失败会退回去。 */
+async function flipTick(button, kind, id, next) {
+  const path = kind === 'habit' ? `/api/habits/${id}/toggle` : `/api/tasks/${id}/toggle`;
+  const body = kind === 'habit'
+    ? { occurred_on: rhythm.date, desired: next }
+    : { desired: next ? 'done' : 'pending' };
+
+  button.classList.toggle('on', next);
+  button.dataset.on = next ? '1' : '0';
+  button.disabled = true;
+
+  if (!navigator.onLine) {
+    enqueue({ path, body });
+    showBanner('离线，操作已排队', 'offline');
+    button.disabled = false;
+    return;
+  }
+  try {
+    await api(path, { method: 'POST', body: JSON.stringify(body) });
+    loadRhythm();
+    loadToday();
+  } catch (error) {
+    button.classList.toggle('on', !next);
+    button.dataset.on = next ? '0' : '1';
+    showBanner(error.message, 'offline');
+  } finally {
+    button.disabled = false;
+  }
+}
+
 async function loadCaptures() {
   try {
     const state = await api('/api/capture');
@@ -309,10 +414,12 @@ async function loadToday() {
 function refresh() {
   renderConnection();
   if (!navigator.onLine) {
+    $('rhythmList').innerHTML = '<div class="muted">离线中，读不到今天要做的事</div>';
     $('captureList').innerHTML = '<div class="muted">离线中，无法读取待确认捕获</div>';
     $('todayList').innerHTML = '<div class="muted">离线中，无法读取今日汇总</div>';
     return;
   }
+  loadRhythm();
   loadCaptures();
   loadToday();
 }

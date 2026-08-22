@@ -47,6 +47,26 @@
   .stat:last-child { border-bottom: 0; }
   .cap { border: 1px solid var(--line); border-radius: 10px; padding: 10px; margin-bottom: 8px; }
   .cap .amt { font-size: 20px; font-weight: 700; }
+  /* 今天要做的：手指点的目标至少 44px 高，站着单手也点得中 */
+  .tick {
+    display: flex; align-items: center; gap: 11px; width: 100%;
+    min-height: 46px; padding: 8px 10px; margin: 0 0 7px;
+    border: 1px solid var(--line); border-radius: 10px;
+    background: transparent; color: var(--text); font: inherit; text-align: left;
+  }
+  .tick .box {
+    flex: 0 0 22px; height: 22px; border: 1.5px solid var(--line);
+    border-radius: 6px; display: grid; place-items: center; font-size: 14px; color: transparent;
+  }
+  .tick.on .box { border-color: var(--accent); background: var(--accent); color: #1a1205; }
+  .tick.on .name { color: var(--muted); text-decoration: line-through; }
+  .tick .name { flex: 1; min-width: 0; font-size: 15px; }
+  .tick .meta { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .tick.late .meta { color: var(--warn); }
+  .tick:disabled { opacity: .55; }
+  .group { margin-bottom: 12px; }
+  .group:last-child { margin-bottom: 0; }
+  .group h3 { margin: 0 0 7px; font-size: 12px; color: var(--muted); font-weight: 600; }
   .banner { padding: 10px 14px; font-size: 13px; text-align: center; }
   .banner.offline { background: #3a2a12; color: var(--warn); }
   .banner.ok { background: #14301f; color: var(--ok); }
@@ -78,6 +98,11 @@
       <button id="commitBtn">确认写入</button>
       <button id="cancelBtn" class="ghost">取消</button>
     </div>
+  </section>
+
+  <section class="card">
+    <h2>今天要做的</h2>
+    <div id="rhythmList" class="muted">加载中…</div>
   </section>
 
   <section class="card">
