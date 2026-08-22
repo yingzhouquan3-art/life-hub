@@ -158,6 +158,7 @@
     ingestPreview: (body) => post(`${API}/ingest/preview`, body),
     ingestCommit: (body) => post(`${API}/ingest/commit`, body),
     ingestFormats: () => fetch(`${API}/ingest/formats`).then(r => r.json()),
+    trends: (period, count) => fetch(`${API}/insights/trends?period=${period}&count=${count}`).then(r => r.json()),
     addRule: (body) => post(`${API}/categorize/rules`, body),
     delRule: async (id) => {
       const response = await fetch(`${API}/categorize/rules/${id}`, { method: 'DELETE' });
@@ -281,6 +282,7 @@
     categorize: null,
     ruleFilter: '',
     ingest: null,
+    trends: null,
     training: { exercises: [], recent_sessions: [], week: {}, records: [] },
     inbox: { items: [], summary: {}, targets: {} },
     insights: null,
@@ -558,6 +560,9 @@
     btnFocusDrop: $('#btn-focus-drop'),
     subscriptionTotal: $('#subscription-total'),
     rulesCount: $('#rules-count'),
+    trendsPeriod: $('#trends-period'),
+    trendsList: $('#trends-list'),
+    trendsUntracked: $('#trends-untracked'),
     ingestFile: $('#ingest-file'),
     ingestKind: $('#ingest-kind'),
     ingestKinds: $('#ingest-kinds'),
@@ -2038,6 +2043,83 @@
     }
   }
 
+  // ---------- 趋势 ----------
+  // 柱子只画有记录的那几期。没记录的那期留空白，不画成贴地的 0——
+  // 「没记」和「是 0」是两件事，画成 0 会让人以为那周真的什么都没花。
+  function trendBars(buckets) {
+    const values = buckets.map(b => b.average).filter(v => v != null);
+    if (!values.length) return '';
+    const top = Math.max(...values);
+    const bottom = Math.min(...values, 0);
+    const span = (top - bottom) || 1;
+    return `<div class="trend-bars">${buckets.map(b => {
+      if (b.average == null) {
+        return `<i class="trend-bar trend-bar--empty" title="${escapeHtml(b.label)}：没有记录"></i>`;
+      }
+      const height = Math.max(6, Math.round((b.average - bottom) / span * 100));
+      return `<i class="trend-bar" style="height:${height}%" title="${escapeHtml(b.label)}：日均 ${b.average}${
+        b.total != null ? `，合计 ${b.total}` : ''}（记了 ${b.days} 天）"></i>`;
+    }).join('')}</div>`;
+  }
+
+  function renderTrends() {
+    const data = state.trends;
+    if (!data) {
+      els.trendsList.innerHTML = '<div class="today-empty">读不到趋势。</div>';
+      els.trendsUntracked.textContent = '';
+      return;
+    }
+    if (!data.metrics.length) {
+      els.trendsList.innerHTML = `<div class="today-empty">
+        这几${escapeHtml(data.period_label)}还没有任何记录，所以没有走势可看。先记几天，或者从「导入」把已有数据放进来。
+      </div>`;
+      els.trendsUntracked.textContent = data.note;
+      return;
+    }
+
+    els.trendsList.innerHTML = data.metrics.map(metric => {
+      const last = metric.buckets[metric.buckets.length - 1];
+      const change = metric.change;
+      // 「1-5」这种是量表刻度不是单位，跟在数字后面读起来像乱码（"日均 3 1-5"）。
+      const isScale = /^\d+\s*-\s*\d+$/.test(metric.unit);
+      const unit = isScale ? '' : ` ${escapeHtml(metric.unit)}`;
+      const scaleHint = isScale ? `（${escapeHtml(metric.unit)} 分制）` : '';
+      const badge = change.comparable
+        ? `<span class="trend-change trend-change--${change.direction}">${
+            change.direction === 'flat' ? '和上一期持平'
+              : `${change.delta > 0 ? '+' : ''}${change.delta}${unit}${
+                  change.percent != null ? `（${change.percent > 0 ? '+' : ''}${change.percent}%）` : ''}`
+          }</span>`
+        : `<span class="trend-change trend-change--none" title="${escapeHtml(change.reason)}">暂不比较</span>`;
+      const latest = last.days
+        ? `日均 ${last.average}${unit}${scaleHint}${
+            last.total != null ? ` · 合计 ${last.total}` : ''} · 记了 ${last.days} 天`
+        : `最近这一${escapeHtml(data.period_label)}还没记`;
+      return `<div class="trend-row">
+        <div class="trend-row__head">
+          <strong>${escapeHtml(metric.label)}</strong>
+          ${badge}
+        </div>
+        ${trendBars(metric.buckets)}
+        <small>${latest}${change.comparable ? '' : ` · ${escapeHtml(change.reason)}`}</small>
+      </div>`;
+    }).join('');
+
+    els.trendsUntracked.innerHTML = data.untracked.length
+      ? `${escapeHtml(data.note)} 还没有记录的指标：${
+          data.untracked.map(m => escapeHtml(m.label)).join('、')}。`
+      : escapeHtml(data.note);
+  }
+
+  async function refreshTrends() {
+    try {
+      state.trends = await api.trends(els.trendsPeriod.value || 'week', 6);
+    } catch (error) {
+      state.trends = null;
+    }
+    renderTrends();
+  }
+
   function renderToday() {
     const today = state.today || {};
     const monthStatusLabels = { unset: '尚未设置月预算', safe: '预算节奏正常', warning: '预算已接近上限', over: '本月已经超出预算' };
@@ -3071,6 +3153,7 @@
     renderSnapshots();
     renderSubscriptions();
     renderRules();
+    renderTrends();
     renderTraining();
     renderInbox();
     renderInsights();
@@ -3134,6 +3217,7 @@
     state.focus = focusState;
     state.subscriptions = subscriptions;
     state.categorize = categorize;
+    refreshTrends();
     els.ingestKinds.textContent = `认得 ${ingestFormats.formats.length} 种文件：`
       + ingestFormats.formats.map(f => f.label).join(' · ');
     refreshSnapshots();
@@ -4382,6 +4466,7 @@
   function syncRestoreButton() {
     els.btnRestoreBackup.disabled = !state.restoreSnapshot || els.restoreConfirm.value.trim() !== '恢复';
   }
+  els.trendsPeriod.addEventListener('change', refreshTrends);
   els.ingestFile.addEventListener('change', onIngestFileChosen);
   els.ingestKind.addEventListener('change', () => {
     if (state.ingest) { state.ingest.preview = null; renderIngestPreview(); }

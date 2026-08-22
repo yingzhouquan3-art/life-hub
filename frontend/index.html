@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=20260821-ingest-1">
+  <link rel="stylesheet" href="./style.css?v=20260821-trends-1">
 </head>
 <body>
 
@@ -1147,9 +1147,20 @@
 
   <main class="life-module tracker-module" data-module-panel="insights" hidden>
     <header class="life-module__head">
-      <div><span class="life-module__eyebrow">CROSS · INSIGHTS</span><h1>洞察</h1><p>看两个指标是不是一起动。这里全部是相关，不是因果。</p></div>
+      <div><span class="life-module__eyebrow">CROSS · INSIGHTS</span><h1>洞察</h1><p>这段时间走势怎么样，两个指标是不是一起动。只描述变化，不评价，也不宣称因果。</p></div>
       <button class="module-jump" data-module-jump="overview">返回生活总览 <span>→</span></button>
     </header>
+    <section class="dashboard-panel trends-panel">
+      <header>
+        <div><h2>趋势</h2><p>每个指标最近几期怎么走。<b>变化按有记录那些天的日均算</b>——记得勤不等于花得多</p></div>
+        <select id="trends-period" aria-label="统计周期">
+          <option value="week" selected>按周 · 最近 6 周</option>
+          <option value="month">按月 · 最近 6 个月</option>
+        </select>
+      </header>
+      <div id="trends-list"></div>
+      <p class="import-note" id="trends-untracked"></p>
+    </section>
     <section class="dashboard-panel">
       <header><div><h2>同期变化</h2><p id="insights-note"></p></div>
         <select id="insights-days" aria-label="观察窗口">
@@ -1287,6 +1298,6 @@
   </div>
 
   <script src="./grid.js"></script>
-  <script src="./app.js?v=20260821-ingest-1"></script>
+  <script src="./app.js?v=20260821-trends-1"></script>
 </body>
 </html>

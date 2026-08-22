@@ -2101,6 +2101,35 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
 .search-panel { grid-column: 1 / -1; }
 .rules-panel { grid-column: 1 / -1; }
 .ingest-panel { grid-column: 1 / -1; }
+
+/* 趋势 */
+.trends-panel select {
+  height: 30px; padding: 0 8px; border: 1px solid var(--line-1); border-radius: 6px;
+  color: var(--text-1); background: var(--bg-input); font-size: 11px;
+}
+#trends-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+.trend-row { padding: 9px 10px; border: 1px solid var(--line-1); border-radius: 8px; }
+.trend-row__head { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+.trend-row__head strong { color: var(--text-1); font-size: 12px; }
+.trend-row small { display: block; margin-top: 5px; color: var(--text-4); font-size: 9.5px; line-height: 1.5; }
+.trend-change { font-size: 10px; white-space: nowrap; }
+.trend-change--up { color: var(--gold-bloom); }
+.trend-change--down { color: #9cc3ff; }
+.trend-change--flat { color: var(--text-3); }
+.trend-change--none { color: var(--text-4); border-bottom: 1px dotted var(--line-1); cursor: help; }
+.trend-bars {
+  display: flex; align-items: flex-end; gap: 3px;
+  height: 38px; margin-top: 7px;
+}
+.trend-bar {
+  flex: 1; min-width: 0; border-radius: 2px 2px 0 0;
+  background: rgba(156,195,255,.35);
+}
+.trend-bar--empty {
+  height: 100%; border-radius: 2px;
+  background: repeating-linear-gradient(45deg, transparent, transparent 3px,
+    rgba(255,255,255,.05) 3px, rgba(255,255,255,.05) 6px);
+}
 .ingest-kinds { color: var(--text-4); font-size: 10px; text-align: right; max-width: 46%; }
 .ingest-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 9px; }
 .ingest-pick select {
