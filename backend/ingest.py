@@ -24,6 +24,14 @@ from typing import Optional
 from fastapi import HTTPException
 
 from backend.health_import import build_health_preview
+from backend.spreadsheet import (
+    describe,
+    looks_like_legacy_xls,
+    looks_like_pdf,
+    looks_like_xlsx,
+    read_xlsx,
+    to_csv_text,
+)
 from backend.statements import build_preview as build_statement_preview
 from backend.statements import detect_source
 
@@ -141,6 +149,59 @@ def identify(filename: str, text: str) -> dict:
         ),
         "looks_like_spreadsheet": lowered.endswith((".xls", ".xlsx")),
     }
+
+
+def to_table_text(filename: str, raw: bytes) -> str:
+    """把上传的文件变成一段可解析的文本表格。
+
+    微信和支付宝现在导出的是 **Excel 或 PDF，没有 CSV**。所以这一层先把
+    Excel 转成 CSV 文本，后面那套账单解析器一个字都不用改——它本来就会
+    自己找表头、认列名，不在乎数据是从哪种容器里倒出来的。
+
+    读不了的格式要**当场说清楚是什么、该怎么办**，而不是丢一句「解析失败」
+    让人去猜。PDF 是版式文件，里面的表格是画出来的不是存出来的；
+    2003 版 .xls 是另一套二进制格式。这两种都让用户回去换个导出格式，
+    比我在这里勉强猜要可靠。
+    """
+    if looks_like_pdf(filename, raw):
+        raise HTTPException(
+            400,
+            "这是 PDF。PDF 里的表格是画上去的，取不回可靠的金额和日期。"
+            "请在微信里重新导出时选 Excel（.xlsx）。",
+        )
+    if looks_like_legacy_xls(filename, raw):
+        raise HTTPException(
+            400,
+            "这是老版 .xls 格式，读不了。用 Excel 或 WPS 打开它，"
+            "另存为「Excel 工作簿 (.xlsx)」再导入。",
+        )
+    if looks_like_xlsx(filename, raw):
+        table = read_xlsx(raw)
+        if not table:
+            raise HTTPException(400, "这个 Excel 文件里没有读到任何一行")
+        return to_csv_text(table)
+
+    # 剩下的按文本处理。微信和支付宝的 CSV 导出常是 GB18030。
+    for encoding in ("utf-8-sig", "utf-8", "gb18030"):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    raise HTTPException(400, "这个文件的编码认不出来，可能不是表格文件")
+
+
+def inspect_table(filename: str, raw: bytes) -> dict:
+    """认不出来的时候，把实际读到的表格摊开给用户看。
+
+    只说「认不出这是什么文件」，用户既不知道哪里不对，也没法告诉别人。
+    把前几行原样列出来，至少能看出是表头不对、还是整份文件都读空了。
+    """
+    if not looks_like_xlsx(filename, raw):
+        return {}
+    try:
+        return describe(read_xlsx(raw))
+    except HTTPException:
+        return {}
 
 
 def _statement_envelope(conn, kind: str, filename: str, text: str) -> dict:

@@ -1918,10 +1918,16 @@
     if (!found) return;
     const best = found.candidates[0];
     if (!best) {
+      const seen = found.seen;
       els.ingestVerdict.innerHTML = `<div class="ingest-unknown">
         <strong>认不出这是什么文件。</strong>
-        <small>${escapeHtml(found.note)}${found.looks_like_spreadsheet
-          ? ' 这看起来是 Excel 文件，请在表格软件里另存为 CSV。' : ''}</small>
+        <small>${escapeHtml(found.note)}</small>
+        ${seen?.preview?.length ? `<div class="ingest-seen">
+          <span>我实际读到的前几行（${fmtInt(seen.rows)} 行 × ${fmtInt(seen.columns)} 列）：</span>
+          <table>${seen.preview.map(row =>
+            `<tr>${row.map(cell => `<td>${escapeHtml(String(cell).slice(0, 18))}</td>`).join('')}</tr>`
+          ).join('')}</table>
+        </div>` : ''}
       </div>`;
       els.btnIngestPreview.disabled = true;
       els.ingestKind.hidden = true;
@@ -2017,21 +2023,46 @@
     return '';
   }
 
+  /** 读成后端能收的形状。
+   *  Excel 是二进制（本质是个 zip），按文本解码会把它毁掉，
+   *  所以二进制一律走 base64；纯文本仍旧按 UTF-8 / GB18030 解码后直接传。 */
+  async function readIngestFile(file) {
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const isZip = bytes[0] === 0x50 && bytes[1] === 0x4b;                    // PK：xlsx
+    const isPdf = bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44; // %PD
+    const isOldXls = bytes[0] === 0xd0 && bytes[1] === 0xcf;                 // 老版 .xls
+    if (!isZip && !isPdf && !isOldXls) {
+      try {
+        return { content: new TextDecoder('utf-8', { fatal: true }).decode(bytes) };
+      } catch (_) {
+        return { content: new TextDecoder('gb18030').decode(bytes) };
+      }
+    }
+    let binary = '';
+    const chunk = 0x8000;  // 一次性 apply 整个文件会爆栈
+    for (let i = 0; i < bytes.length; i += chunk) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return { content_base64: btoa(binary) };
+  }
+
   async function onIngestFileChosen() {
     const file = els.ingestFile.files?.[0];
     resetIngest(true);
     if (!file) return;
     els.ingestVerdict.textContent = '正在辨认…';
     try {
-      const text = await readStatementFile(file);
-      const identified = await api.ingestIdentify({ content: text, filename: file.name });
-      state.ingest = { file: file.name, text, identified, preview: null };
+      const payload = await readIngestFile(file);
+      const identified = await api.ingestIdentify({ ...payload, filename: file.name });
+      state.ingest = { file: file.name, payload, identified, preview: null };
       renderIngestVerdict();
     } catch (error) {
       state.ingest = null;
-      els.ingestVerdict.textContent = '读不出这个文件。';
-      els.ingestError.textContent = cleanError(error, '读取失败');
-      els.ingestError.hidden = false;
+      // 后端对 PDF、老版 .xls 这些会给出「是什么、该怎么办」的具体说法，
+      // 直接当标题显示。再顶一句「读不出这个文件」只是把有用的信息挤下去。
+      els.ingestVerdict.innerHTML =
+        `<div class="ingest-unknown"><strong>${escapeHtml(cleanError(error, '读不出这个文件'))}</strong></div>`;
+      els.ingestError.hidden = true;
     }
   }
 
@@ -2041,9 +2072,9 @@
     els.btnIngestPreview.disabled = true;
     try {
       state.ingest.preview = await api.ingestPreview({
+        ...state.ingest.payload,
         kind: els.ingestKind.value || state.ingest.identified.best,
         filename: state.ingest.file,
-        content: state.ingest.text,
       });
       renderIngestPreview();
     } catch (error) {

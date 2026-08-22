@@ -2233,6 +2233,13 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
 .ingest-guess small { display: block; margin-top: 4px; color: var(--text-4); font-size: 9.5px; }
 .ingest-unknown strong { display: block; color: var(--gold-bloom); font-size: 12px; }
 .ingest-unknown small { display: block; margin-top: 3px; color: var(--text-4); font-size: 10px; }
+.ingest-seen { margin-top: 8px; }
+.ingest-seen > span { display: block; margin-bottom: 4px; color: var(--text-4); font-size: 9.5px; }
+.ingest-seen table { border-collapse: collapse; font-size: 10px; color: var(--text-3); }
+.ingest-seen td {
+  padding: 2px 6px; border: 1px solid var(--line-1);
+  max-width: 130px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .ingest-done { color: var(--text-1); font-size: 12px; }
 .ingest-summary {
   margin: 9px 0 7px; padding: 7px 9px; border-radius: 7px;

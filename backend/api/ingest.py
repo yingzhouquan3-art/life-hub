@@ -10,15 +10,23 @@
 """
 from __future__ import annotations
 
-from typing import Literal
+import base64
+import binascii
+from typing import Literal, Optional
 
-from fastapi import APIRouter
-from pydantic import BaseModel, Field
+from fastapi import APIRouter, HTTPException
+from pydantic import BaseModel, Field, model_validator
 
 from backend.api import health_import as health_import_api
 from backend.api import ledger as ledger_api
 from backend.core.db import db
-from backend.ingest import build_ingest_preview, formats, identify
+from backend.ingest import (
+    build_ingest_preview,
+    formats,
+    identify,
+    inspect_table,
+    to_table_text,
+)
 
 router = APIRouter()
 
@@ -26,8 +34,28 @@ KindLiteral = Literal["wechat_statement", "alipay_statement", "health_workout", 
 
 
 class IdentifyIn(BaseModel):
-    content: str = Field(..., min_length=1, max_length=4_000_000)
+    """文件内容。文本走 content，二进制（Excel）走 content_base64。
+
+    微信和支付宝现在导出的是 Excel，那是个 zip，没法当文本传。
+    """
+
+    content: Optional[str] = Field(None, max_length=4_000_000)
+    content_base64: Optional[str] = Field(None, max_length=12_000_000)
     filename: str = Field("导入文件.csv", max_length=255)
+
+    @model_validator(mode="after")
+    def _need_one(self):
+        if not self.content and not self.content_base64:
+            raise ValueError("需要 content 或 content_base64")
+        return self
+
+    def raw_bytes(self) -> bytes:
+        if self.content_base64:
+            try:
+                return base64.b64decode(self.content_base64, validate=True)
+            except (binascii.Error, ValueError) as exc:
+                raise HTTPException(400, "文件内容传坏了，请重新选一次文件") from exc
+        return (self.content or "").encode("utf-8")
 
 
 class IngestPreviewIn(IdentifyIn):
@@ -48,15 +76,25 @@ def ingest_formats():
 
 @router.post("/api/ingest/identify")
 def ingest_identify(body: IdentifyIn):
-    """认一下这是什么文件。只读，连解析都不做。"""
-    return identify(body.filename, body.content)
+    """认一下这是什么文件。只读，不写入任何数据。
+
+    Excel 会先转成文本表格再判断——后面那套识别和解析一个字都不用改。
+    """
+    raw = body.raw_bytes()
+    text = to_table_text(body.filename, raw)
+    result = identify(body.filename, text)
+    if not result["candidates"]:
+        # 认不出来时把实际读到的前几行摊开，否则用户没有排查的余地
+        result["seen"] = inspect_table(body.filename, raw)
+    return result
 
 
 @router.post("/api/ingest/preview")
 def ingest_preview(body: IngestPreviewIn):
     """按选定的类型解析并对账。只读，不写入任何数据。"""
+    text = to_table_text(body.filename, body.raw_bytes())
     with db() as conn:
-        return build_ingest_preview(conn, body.kind, body.filename, body.content)
+        return build_ingest_preview(conn, body.kind, body.filename, text)
 
 
 @router.post("/api/ingest/commit")

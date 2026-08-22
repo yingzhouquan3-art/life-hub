@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=20260822-layout-4">
+  <link rel="stylesheet" href="./style.css?v=20260822-xlsx-2">
 </head>
 <body>
 
@@ -750,7 +750,7 @@
               <span class="ingest-kinds" id="ingest-kinds"></span>
             </header>
             <div class="ingest-pick">
-              <label class="restore-file"><span>选择 CSV 文件</span><input id="ingest-file" type="file" accept=".csv,.txt,text/csv,text/plain"></label>
+              <label class="restore-file"><span>选择账单文件（Excel 或 CSV）</span><input id="ingest-file" type="file" accept=".csv,.txt,.xlsx,.xls,.pdf,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label>
               <select id="ingest-kind" aria-label="这个文件是什么" hidden></select>
               <button id="btn-ingest-preview" disabled>看看会写入什么</button>
             </div>
@@ -1321,6 +1321,6 @@
   </div>
 
   <script src="./grid.js"></script>
-  <script src="./app.js?v=20260822-layout-4"></script>
+  <script src="./app.js?v=20260822-xlsx-2"></script>
 </body>
 </html>
