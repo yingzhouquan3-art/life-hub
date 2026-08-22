@@ -10,22 +10,35 @@
 # 「今天记了东西没有」，记了就安静退出——没有理由的提醒只会训练人忽略它。
 #
 # 服务没在跑也安静退出：那多半说明你不在电脑前，弹通知给空房间看没有意义。
+#
+# 为什么用 NotifyIcon 而不是 WinRT 的 ToastNotification：
+# 后者要求调用方的 AppUserModelID 已经在系统里注册过。没注册时它
+# **既不报错也不显示**——脚本退出码 0，用户什么都没看到。第一版就是这么
+# 悄悄失败的。NotifyIcon 会自己生成并注册一个 AUMID（注册表里那些
+# NotifyIconGeneratedAumid_* 就是它留下的），不依赖任何前置注册。
 
 $ErrorActionPreference = "Stop"
 $appUrl = $Url
 
 function Show-Toast([string]$title, [string]$body) {
-    # Win10/11 自带的 WinRT 接口，不依赖任何需要额外安装的模块。
-    # AppId 借用 PowerShell 自己的注册项——这是不注册应用也能弹通知的标准做法。
-    [void][Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]
-    [void][Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom, ContentType = WindowsRuntime]
+    Add-Type -AssemblyName System.Windows.Forms
+    Add-Type -AssemblyName System.Drawing
 
-    $xml = "<toast><visual><binding template=`"ToastGeneric`"><text>$title</text><text>$body</text></binding></visual></toast>"
-    $doc = New-Object Windows.Data.Xml.Dom.XmlDocument
-    $doc.LoadXml($xml)
-    $toast = New-Object Windows.UI.Notifications.ToastNotification $doc
-    $appId = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\WindowsPowerShell\v1.0\powershell.exe'
-    [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($appId).Show($toast)
+    $icon = New-Object System.Windows.Forms.NotifyIcon
+    try {
+        $icon.Icon = [System.Drawing.SystemIcons]::Information
+        $icon.Visible = $true
+        $icon.BalloonTipTitle = $title
+        $icon.BalloonTipText = $body
+        $icon.BalloonTipIcon = [System.Windows.Forms.ToolTipIcon]::Info
+        $icon.ShowBalloonTip(15000)
+        # 托盘图标活着的时候通知才会留在屏幕上，太早退出会被一起收走
+        Start-Sleep -Seconds 8
+    }
+    finally {
+        $icon.Visible = $false
+        $icon.Dispose()
+    }
 }
 
 if ($Test) {

@@ -157,7 +157,25 @@ class LauncherScriptTests(unittest.TestCase):
         script = self.reminder()
         self.assertNotIn("BurntToast", script)
         self.assertNotIn("Install-Module", script)
-        self.assertIn("Windows.UI.Notifications", script)
+        self.assertIn("System.Windows.Forms", script)
+
+    def test_reminder_does_not_use_the_silently_failing_toast_api(self):
+        """WinRT 的 ToastNotification 要求 AppUserModelID 已在系统里注册。
+        没注册时它**既不报错也不显示**：脚本退出码 0，用户什么都没看到。
+
+        第一版就是这么悄悄失败的——我拿退出码当成了「用户看到了」。
+        改用 NotifyIcon，它自己生成并注册 AUMID，不依赖前置注册。
+        """
+        script = self.reminder()
+        self.assertNotIn("ToastNotificationManager", script)
+        self.assertNotIn("Windows.UI.Notifications", script)
+        self.assertIn("NotifyIcon", script)
+
+    def test_reminder_keeps_the_tray_icon_alive_long_enough(self):
+        """托盘图标一销毁，通知会跟着被收走。立刻退出等于没弹。"""
+        script = self.reminder()
+        self.assertIn("Start-Sleep", script)
+        self.assertLess(script.index("ShowBalloonTip"), script.index("Dispose"))
 
     def test_reminder_script_has_no_stray_control_characters(self):
         """写这个脚本时踩过一次：\v 被当成垂直制表符写进了文件，

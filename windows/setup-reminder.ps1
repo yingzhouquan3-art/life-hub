@@ -46,4 +46,16 @@ Write-Output "它只在你当天什么都没记的时候才出声；记过了就
 Write-Output "服务没在运行时也不会弹——那多半说明你不在电脑前。"
 Write-Output ""
 Write-Output "想取消：双击「移除每日提醒.cmd」。"
+Write-Output ""
+
+# 立刻发一条测试通知。通知这种东西「设置成功」不等于「你看得到」——
+# Windows 会因为专注助手、通知权限等原因静默丢掉，而脚本这边完全无感。
+# 当场发一条，你现在就能确认，而不是等到某天晚上才发现它一直没响过。
+Write-Output "正在发一条测试通知，请留意屏幕右下角……"
+& (Join-Path $PSScriptRoot "remind.ps1") -Test | Out-Null
+Write-Output ""
+Write-Output "看到那条通知了吗？"
+Write-Output "  看到了 —— 设置完成，不用再做什么。"
+Write-Output "  没看到 —— 打开「设置 → 系统 → 通知」，确认通知总开关是打开的，"
+Write-Output "            并且「专注助手 / 请勿打扰」没有开着。"
 Read-Host "按回车关闭"
