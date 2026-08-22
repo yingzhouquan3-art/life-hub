@@ -33,6 +33,7 @@ from backend.api import fitness as fitness_api
 from backend.api import goals as goals_api
 from backend.api import health_import as health_import_api
 from backend.api import inbox as inbox_api
+from backend.api import ingest as ingest_api
 from backend.api import insights as insights_api
 from backend.api import ledger as ledger_api
 from backend.api import nutrition as nutrition_api
@@ -140,6 +141,7 @@ app.include_router(tags_api.router)
 app.include_router(insights_api.router)
 app.include_router(statements_api.router)
 app.include_router(health_import_api.router)
+app.include_router(ingest_api.router)
 
 
 # ---------- Static ----------

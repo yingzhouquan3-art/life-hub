@@ -46,6 +46,7 @@ def preview_statement(body: StatementIn):
                     "type": row["type"],
                     "amount": row["amount"],
                     "note": row["note"],
+                    "category": row.get("category"),
                 }
                 for row in preview["reconciliation"]["new"]
             ],

@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=20260821-rules-1">
+  <link rel="stylesheet" href="./style.css?v=20260821-ingest-1">
 </head>
 <body>
 
@@ -718,6 +718,33 @@
         </section>
 
         <div class="data-grid">
+          <section class="dashboard-panel ingest-panel">
+            <header>
+              <div>
+                <h2>导入</h2>
+                <p>把导出的文件丢进来，先认出它是什么，再决定写进哪个模块</p>
+              </div>
+              <span class="ingest-kinds" id="ingest-kinds"></span>
+            </header>
+            <div class="ingest-pick">
+              <label class="restore-file"><span>选择 CSV 文件</span><input id="ingest-file" type="file" accept=".csv,.txt,text/csv,text/plain"></label>
+              <select id="ingest-kind" aria-label="这个文件是什么" hidden></select>
+              <button id="btn-ingest-preview" disabled>看看会写入什么</button>
+            </div>
+            <div class="ingest-verdict" id="ingest-verdict">还没有选文件。</div>
+            <div class="ingest-summary" id="ingest-summary" hidden></div>
+            <div class="ingest-rows" id="ingest-rows"></div>
+            <div class="ingest-actions" id="ingest-actions" hidden>
+              <button id="btn-ingest-commit">确认写入</button>
+              <button class="search-reset" id="btn-ingest-reset">取消</button>
+            </div>
+            <p class="plan-status" id="ingest-error" hidden></p>
+            <p class="import-note">
+              识别只是看文件的样子，<b>不代表内容一定对</b>；写入前请核对条数和金额。
+              和已有记录对得上的行不会重复写入。支出分类是按关键字猜的，可以在下面逐行改，
+              <b>导入不会把这些猜测变成新规则</b>——规则只在你逐条确认捕获时才学。
+            </p>
+          </section>
           <section class="dashboard-panel annual-report-panel">
             <header><div><h2>年度报告</h2><p>按真实账目汇总，不含规划中的预计收入</p></div><div class="annual-actions"><input id="annual-year" type="number" min="1900" max="2200" aria-label="报告年份"><button id="btn-load-annual">生成</button><button id="btn-export-annual">导出 CSV</button></div></header>
             <div class="annual-chart" id="annual-chart"></div>
@@ -1260,6 +1287,6 @@
   </div>
 
   <script src="./grid.js"></script>
-  <script src="./app.js?v=20260821-rules-1"></script>
+  <script src="./app.js?v=20260821-ingest-1"></script>
 </body>
 </html>

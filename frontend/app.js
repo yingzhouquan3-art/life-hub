@@ -154,6 +154,10 @@
     finishFocus: (id, body) => post(`${API}/study/focus/${id}/finish`, body),
     subscriptions: () => fetch(`${API}/subscriptions`).then(r => r.json()),
     categorizeState: () => fetch(`${API}/categorize`).then(r => r.json()),
+    ingestIdentify: (body) => post(`${API}/ingest/identify`, body),
+    ingestPreview: (body) => post(`${API}/ingest/preview`, body),
+    ingestCommit: (body) => post(`${API}/ingest/commit`, body),
+    ingestFormats: () => fetch(`${API}/ingest/formats`).then(r => r.json()),
     addRule: (body) => post(`${API}/categorize/rules`, body),
     delRule: async (id) => {
       const response = await fetch(`${API}/categorize/rules/${id}`, { method: 'DELETE' });
@@ -276,6 +280,7 @@
     subscriptions: null,
     categorize: null,
     ruleFilter: '',
+    ingest: null,
     training: { exercises: [], recent_sessions: [], week: {}, records: [] },
     inbox: { items: [], summary: {}, targets: {} },
     insights: null,
@@ -553,6 +558,17 @@
     btnFocusDrop: $('#btn-focus-drop'),
     subscriptionTotal: $('#subscription-total'),
     rulesCount: $('#rules-count'),
+    ingestFile: $('#ingest-file'),
+    ingestKind: $('#ingest-kind'),
+    ingestKinds: $('#ingest-kinds'),
+    ingestVerdict: $('#ingest-verdict'),
+    ingestSummary: $('#ingest-summary'),
+    ingestRows: $('#ingest-rows'),
+    ingestActions: $('#ingest-actions'),
+    ingestError: $('#ingest-error'),
+    btnIngestPreview: $('#btn-ingest-preview'),
+    btnIngestCommit: $('#btn-ingest-commit'),
+    btnIngestReset: $('#btn-ingest-reset'),
     rulesList: $('#rules-list'),
     ruleKeyword: $('#rule-keyword'),
     ruleCategory: $('#rule-category'),
@@ -1838,6 +1854,190 @@
     }
   }
 
+  // ---------- 统一导入口 ----------
+  // 三步：认出这是什么 → 看清会写入什么 → 写入。
+  // 前两步不写任何数据，第三步只写「还没记过」的那些行。
+  const INGEST_MAX_ROWS = 300;  // 再多就只显示前面这些，但写入的是全部
+
+  function resetIngest(keepFile) {
+    state.ingest = null;
+    if (!keepFile) els.ingestFile.value = '';
+    els.ingestKind.hidden = true;
+    els.ingestSummary.hidden = true;
+    els.ingestActions.hidden = true;
+    els.ingestError.hidden = true;
+    els.ingestRows.innerHTML = '';
+    els.ingestVerdict.textContent = '还没有选文件。';
+    els.btnIngestPreview.disabled = true;
+  }
+
+  function renderIngestVerdict() {
+    const found = state.ingest?.identified;
+    if (!found) return;
+    const best = found.candidates[0];
+    if (!best) {
+      els.ingestVerdict.innerHTML = `<div class="ingest-unknown">
+        <strong>认不出这是什么文件。</strong>
+        <small>${escapeHtml(found.note)}${found.looks_like_spreadsheet
+          ? ' 这看起来是 Excel 文件，请在表格软件里另存为 CSV。' : ''}</small>
+      </div>`;
+      els.btnIngestPreview.disabled = true;
+      els.ingestKind.hidden = true;
+      return;
+    }
+
+    els.ingestKind.innerHTML = found.candidates.map(candidate =>
+      `<option value="${candidate.kind}">${escapeHtml(candidate.label)} → ${escapeHtml(candidate.module_label)}</option>`
+    ).join('');
+    els.ingestKind.hidden = found.candidates.length < 2;
+    els.btnIngestPreview.disabled = false;
+
+    els.ingestVerdict.innerHTML = `<div class="ingest-guess">
+      <strong>这看起来是${escapeHtml(best.label)}</strong>
+      <span>确认后会写进「${escapeHtml(best.module_label)}」：${escapeHtml(best.outcome)}</span>
+      <ul>${best.evidence.map(line => `<li>${escapeHtml(line)}</li>`).join('')}</ul>
+      ${found.candidates.length > 1
+        ? '<small>认错了就在上面改选，不用重新来过。</small>' : ''}
+    </div>`;
+  }
+
+  function renderIngestPreview() {
+    const preview = state.ingest?.preview;
+    if (!preview) {
+      els.ingestSummary.hidden = true;
+      els.ingestActions.hidden = true;
+      els.ingestRows.innerHTML = '';
+      return;
+    }
+    const s = preview.summary;
+    const bits = [
+      `解析 ${fmtInt(s.parsed)} 行`,
+      `<b>将写入 ${fmtInt(s.will_write)} 行</b>`,
+      `已经记过 ${fmtInt(s.already_have)} 行`,
+    ];
+    if (s.skipped) bits.push(`认不出而跳过 ${fmtInt(s.skipped)} 行`);
+    // 没有要写的行时不报金额：那个 ¥0 说的是「新增合计」，很容易被读成「这个月花了 0 元」。
+    if (s.amount != null && s.will_write) bits.push(`将写入合计 ${fmtCNY(s.amount)}`);
+    if (s.date_from) bits.push(`${s.date_from} 至 ${s.date_to}`);
+    const cat = preview.categories;
+    if (cat) bits.push(`分类猜中 ${fmtInt(cat.guessed)} 行${cat.unguessed ? `，${fmtInt(cat.unguessed)} 行落入其他` : ''}`);
+    els.ingestSummary.innerHTML = bits.join(' · ');
+    els.ingestSummary.hidden = false;
+
+    const rows = preview.rows || [];
+    els.ingestActions.hidden = !rows.length;
+    if (!rows.length) {
+      els.ingestRows.innerHTML = `<div class="today-empty">${
+        s.already_have ? '这个文件里的记录都已经在库里了，没有要写的。' : '没有可写入的行。'}</div>`;
+      return;
+    }
+
+    const shown = rows.slice(0, INGEST_MAX_ROWS);
+    const isLedger = preview.module === 'ledger';
+    els.ingestRows.innerHTML = shown.map((row, index) => {
+      const right = isLedger
+        ? `<select data-ingest-category="${index}" aria-label="第 ${index + 1} 行的分类">${
+            Object.entries(CATEGORY_LABELS).map(([key, label]) =>
+              `<option value="${key}"${key === (row.category || 'other') ? ' selected' : ''}>${label}</option>`).join('')
+          }</select>`
+        : `<span class="ingest-row__extra">${escapeHtml(describeIngestRow(preview.kind, row))}</span>`;
+      return `<div class="ingest-row">
+        <span class="ingest-row__date">${escapeHtml(row.occurred_on)}</span>
+        <span class="ingest-row__note">${escapeHtml(row.note || describeIngestRow(preview.kind, row))}</span>
+        ${isLedger ? `<em>${fmtCNY(row.amount)}</em>` : ''}
+        ${row.category_by ? `<small class="ingest-row__why">按「${escapeHtml(row.category_by)}」</small>` : ''}
+        ${right}
+      </div>`;
+    }).join('') + (rows.length > shown.length
+      ? `<div class="ingest-more">还有 ${fmtInt(rows.length - shown.length)} 行没有显示，确认后会一并写入。</div>`
+      : '');
+
+    els.ingestRows.querySelectorAll('[data-ingest-category]').forEach(select => {
+      select.addEventListener('change', () => {
+        rows[Number(select.dataset.ingestCategory)].category = select.value;
+      });
+    });
+  }
+
+  function describeIngestRow(kind, row) {
+    if (kind === 'health_workout') {
+      const parts = [`${fmtInt(row.duration_minutes)} 分钟`];
+      if (row.distance_km) parts.push(`${row.distance_km} 公里`);
+      if (row.calories) parts.push(`${fmtInt(row.calories)} 千卡`);
+      return parts.join(' · ');
+    }
+    if (kind === 'health_body') {
+      const parts = [];
+      if (row.weight_kg != null) parts.push(`${row.weight_kg} kg`);
+      if (row.body_fat_pct != null) parts.push(`体脂 ${row.body_fat_pct}%`);
+      return parts.join(' · ');
+    }
+    return '';
+  }
+
+  async function onIngestFileChosen() {
+    const file = els.ingestFile.files?.[0];
+    resetIngest(true);
+    if (!file) return;
+    els.ingestVerdict.textContent = '正在辨认…';
+    try {
+      const text = await readStatementFile(file);
+      const identified = await api.ingestIdentify({ content: text, filename: file.name });
+      state.ingest = { file: file.name, text, identified, preview: null };
+      renderIngestVerdict();
+    } catch (error) {
+      state.ingest = null;
+      els.ingestVerdict.textContent = '读不出这个文件。';
+      els.ingestError.textContent = cleanError(error, '读取失败');
+      els.ingestError.hidden = false;
+    }
+  }
+
+  async function onIngestPreview() {
+    if (!state.ingest || state.busy) return;
+    els.ingestError.hidden = true;
+    els.btnIngestPreview.disabled = true;
+    try {
+      state.ingest.preview = await api.ingestPreview({
+        kind: els.ingestKind.value || state.ingest.identified.best,
+        filename: state.ingest.file,
+        content: state.ingest.text,
+      });
+      renderIngestPreview();
+    } catch (error) {
+      state.ingest.preview = null;
+      renderIngestPreview();
+      els.ingestError.textContent = cleanError(error, '这个文件解析不了');
+      els.ingestError.hidden = false;
+    } finally {
+      els.btnIngestPreview.disabled = false;
+    }
+  }
+
+  async function onIngestCommit() {
+    const preview = state.ingest?.preview;
+    if (state.busy || !preview?.rows?.length) return;
+    state.busy = true;
+    els.btnIngestCommit.disabled = true;
+    try {
+      const result = await api.ingestCommit({
+        kind: preview.kind, filename: preview.filename, rows: preview.rows,
+      });
+      const failed = (result.failed || []).length;
+      resetIngest();
+      els.ingestVerdict.innerHTML = `<div class="ingest-done">
+        已写入 <strong>${fmtInt(result.imported)}</strong> 条到「${escapeHtml(preview.module_label)}」。${
+        failed ? ` 有 ${fmtInt(failed)} 行没写成功。` : ''}</div>`;
+      await loadAndPaint();
+    } catch (error) {
+      els.ingestError.textContent = cleanError(error, '写入失败');
+      els.ingestError.hidden = false;
+    } finally {
+      state.busy = false;
+      els.btnIngestCommit.disabled = false;
+    }
+  }
+
   function renderToday() {
     const today = state.today || {};
     const monthStatusLabels = { unset: '尚未设置月预算', safe: '预算节奏正常', warning: '预算已接近上限', over: '本月已经超出预算' };
@@ -2925,15 +3125,17 @@
     state.lifeCalendar = lifeCalendar || { month: '', selected_date: '', days: [], summary: {}, selected: {} };
     state.goals = data.goals || { goals: [], summary: {} };
     state.capture = data.capture || { pending: [], summary: {}, channel_labels: {} };
-    const [bodyState, trainingState, inboxState, focusState, subscriptions, categorize] =
-      await Promise.all([
+    const [bodyState, trainingState, inboxState, focusState, subscriptions, categorize,
+           ingestFormats] = await Promise.all([
         api.bodyState(), api.trainingState(), api.inboxState(), api.focusState(),
-        api.subscriptions(), api.categorizeState(),
+        api.subscriptions(), api.categorizeState(), api.ingestFormats(),
       ]);
     state.body = bodyState;
     state.focus = focusState;
     state.subscriptions = subscriptions;
     state.categorize = categorize;
+    els.ingestKinds.textContent = `认得 ${ingestFormats.formats.length} 种文件：`
+      + ingestFormats.formats.map(f => f.label).join(' · ');
     refreshSnapshots();
     state.training = trainingState;
     state.inbox = inboxState;
@@ -4180,6 +4382,13 @@
   function syncRestoreButton() {
     els.btnRestoreBackup.disabled = !state.restoreSnapshot || els.restoreConfirm.value.trim() !== '恢复';
   }
+  els.ingestFile.addEventListener('change', onIngestFileChosen);
+  els.ingestKind.addEventListener('change', () => {
+    if (state.ingest) { state.ingest.preview = null; renderIngestPreview(); }
+  });
+  els.btnIngestPreview.addEventListener('click', onIngestPreview);
+  els.btnIngestCommit.addEventListener('click', onIngestCommit);
+  els.btnIngestReset.addEventListener('click', () => resetIngest());
   els.btnAddRule.addEventListener('click', onAddRule);
   els.ruleKeyword.addEventListener('keydown', (event) => {
     if (event.key === 'Enter') onAddRule();

@@ -27,6 +27,8 @@ from typing import Iterable, Optional
 
 from fastapi import HTTPException
 
+from backend.modules.categorize import suggest_category
+
 SOURCES = {
     "wechat": "微信支付账单",
     "alipay": "支付宝账单",
@@ -286,13 +288,43 @@ def reconcile(conn, rows: list[dict]) -> dict:
     }
 
 
+def apply_categories(conn, rows: list[dict]) -> dict:
+    """给每一行猜一个支出分类，并说明依据。
+
+    不猜就等于全部落进「其他」，那样导进来的几百笔在分类统计里毫无意义——
+    一个说得出依据的猜测，比一个沉默的默认值有用。
+
+    两条边界：
+    - 收入行不参与，支出分类对它没有意义；
+    - **不回写规则**。批量导入不是用户对每一行的确认，
+      拿它去学习会让一次误判在几百行上自我强化。学习只发生在逐条确认时。
+    """
+    guessed = 0
+    for row in rows:
+        if row["type"] != "expense":
+            continue
+        hit = suggest_category(conn, row.get("note", ""))
+        if not hit:
+            continue
+        row["category"] = hit["category"]
+        row["category_by"] = hit["keyword"]
+        guessed += 1
+    return {
+        "guessed": guessed,
+        "unguessed": sum(1 for row in rows if row["type"] == "expense" and not row.get("category")),
+        "note": "分类是按关键字猜的，写入前可以改；导入不会把这些猜测变成新规则。",
+    }
+
+
 def build_preview(conn, text: str, source: Optional[str] = None) -> dict:
-    """解析 + 对账，一次给出可确认的预览。全程只读。"""
+    """解析 + 对账 + 猜分类，一次给出可确认的预览。全程只读。"""
     parsed = parse_statement(text, source)
+    categories = apply_categories(conn, parsed["rows"])
     result = reconcile(conn, parsed["rows"])
     return {
         **parsed,
         "reconciliation": result,
+        "categories": categories,
         "generated_at": datetime.now().isoformat(),
         "note": "只有「还没记」的行会写入账本；「已经记过」的行不会重复入账。",
     }
