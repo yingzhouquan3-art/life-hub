@@ -15,7 +15,8 @@
    本周记了 7 天、上周只记了 2 天，总和翻三倍不代表你真花得更多，
    只代表你这周记得更勤。总和照样显示，但它只是参考，不参与比较。
 
-3. **一期里记录不足几天就不给变化数字**，而不是给一个看起来很确定的百分比。
+3. **两期记录疏密悬殊就不给变化数字**，而不是给一个看起来很确定的百分比。
+   注意挡的是「悬殊」不是「稀疏」——一周只练两次力量的人也该看得到走势。
 
 4. **只描述变化，不评价。** 支出涨了不等于"变差了"，睡眠变少也可能是
    那几天在赶due。这里不替用户下结论。
@@ -30,9 +31,18 @@ from fastapi import HTTPException
 
 from backend.views.insights import METRICS
 
-# 一期里少于这么多天有记录，就不给变化数字：
-# 拿一天去代表一周，得到的百分比只是噪声。
-MIN_DAYS_PER_PERIOD = 3
+# 一个点算不出平均值，两个点才勉强算得上一期的水平。
+MIN_DAYS_PER_PERIOD = 2
+
+# 两期的记录天数不能悬殊：稀疏那期至少要有稠密那期的一半。
+#
+# 这两条一起工作。真正要防的是**覆盖度悬殊**而不是绝对天数——
+# 上周记 2 天、本周记 6 天，日均看着可比，其实那 2 天代表不了上周。
+#
+# 曾经的写法是「两期都得满 3 天」，那会把一整类合理的使用方式静默排除掉：
+# 一周练两次力量的人永远拿不到训练容量的趋势，一周量两次体重的人
+# 永远看不到体重变化。稀疏不等于不可比，悬殊才不可比。
+MIN_COVERAGE_RATIO = 0.5
 
 # 每个指标该怎么归并到一期。
 # sum  ：这一期一共多少（学习时长、支出这类累计量）
@@ -100,8 +110,15 @@ def _describe_change(current: Optional[dict], previous: Optional[dict]) -> dict:
     if current["days"] < MIN_DAYS_PER_PERIOD or previous["days"] < MIN_DAYS_PER_PERIOD:
         return {
             "comparable": False,
-            "reason": f"记录天数不足 {MIN_DAYS_PER_PERIOD} 天，"
+            "reason": f"至少要有 {MIN_DAYS_PER_PERIOD} 天记录才算得出一期的水平，"
                       f"这一期记了 {current['days']} 天、上一期 {previous['days']} 天",
+        }
+    thin, thick = sorted((current["days"], previous["days"]))
+    if thin < thick * MIN_COVERAGE_RATIO:
+        return {
+            "comparable": False,
+            "reason": f"两期记录多少差太远（{previous['days']} 天 对 {current['days']} 天），"
+                      f"少的那期代表不了整期，比出来的差别多半是记录疏密造成的",
         }
     before, after = previous["average"], current["average"]
     delta = round(after - before, 2)

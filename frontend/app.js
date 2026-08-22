@@ -158,6 +158,13 @@
     ingestPreview: (body) => post(`${API}/ingest/preview`, body),
     ingestCommit: (body) => post(`${API}/ingest/commit`, body),
     ingestFormats: () => fetch(`${API}/ingest/formats`).then(r => r.json()),
+    demoState: () => fetch(`${API}/demo`).then(r => r.json()),
+    demoLoad: (days) => post(`${API}/demo`, { days }),
+    demoRemove: async () => {
+      const response = await fetch(`${API}/demo`, { method: 'DELETE' });
+      if (!response.ok) throw new Error(`${response.status} ${await response.text()}`);
+      return response.json();
+    },
     trends: (period, count) => fetch(`${API}/insights/trends?period=${period}&count=${count}`).then(r => r.json()),
     addRule: (body) => post(`${API}/categorize/rules`, body),
     delRule: async (id) => {
@@ -283,6 +290,7 @@
     ruleFilter: '',
     ingest: null,
     trends: null,
+    demo: null,
     training: { exercises: [], recent_sessions: [], week: {}, records: [] },
     inbox: { items: [], summary: {}, targets: {} },
     insights: null,
@@ -560,6 +568,10 @@
     btnFocusDrop: $('#btn-focus-drop'),
     subscriptionTotal: $('#subscription-total'),
     rulesCount: $('#rules-count'),
+    demoStatus: $('#demo-status'),
+    demoError: $('#demo-error'),
+    btnDemoLoad: $('#btn-demo-load'),
+    btnDemoRemove: $('#btn-demo-remove'),
     trendsPeriod: $('#trends-period'),
     trendsList: $('#trends-list'),
     trendsUntracked: $('#trends-untracked'),
@@ -2120,6 +2132,63 @@
     renderTrends();
   }
 
+  // ---------- 示例数据 ----------
+  function renderDemo() {
+    const data = state.demo;
+    if (!data) { els.demoStatus.textContent = ''; return; }
+    els.demoStatus.textContent = data.loaded
+      ? `已装入 ${fmtInt(data.demo_records)} 条示例 · 你自己的记录 ${fmtInt(data.real_records)} 条`
+      : (data.real_records
+          ? `你已经有 ${fmtInt(data.real_records)} 条自己的记录`
+          : '库里还没有任何记录');
+    els.btnDemoLoad.hidden = data.loaded;
+    els.btnDemoRemove.hidden = !data.loaded;
+  }
+
+  async function onDemoLoad() {
+    if (state.busy) return;
+    // 已经有真实记录时先问一句：示例会和自己的记录混在一屏里看。
+    if (state.demo?.real_records &&
+        !window.confirm(`你已经有 ${state.demo.real_records} 条自己的记录。\n` +
+          '装入示例数据不会删除它们，但两者会显示在一起。随时可以一键移除。继续吗？')) return;
+    state.busy = true;
+    els.btnDemoLoad.disabled = true;
+    els.demoError.hidden = true;
+    try {
+      state.demo = await api.demoLoad(60);
+      await loadAndPaint();
+      renderDemo();
+    } catch (error) {
+      els.demoError.textContent = cleanError(error, '装入失败');
+      els.demoError.hidden = false;
+    } finally {
+      state.busy = false;
+      els.btnDemoLoad.disabled = false;
+    }
+  }
+
+  async function onDemoRemove() {
+    if (state.busy) return;
+    if (!window.confirm('移除全部示例数据？只会删掉它自己写进去的那些，你的记录不受影响。')) return;
+    state.busy = true;
+    els.btnDemoRemove.disabled = true;
+    els.demoError.hidden = true;
+    try {
+      const result = await api.demoRemove();
+      state.demo = result;
+      await loadAndPaint();
+      renderDemo();
+      els.demoError.textContent = `已移除 ${fmtInt(result.removed)} 条示例数据。`;
+      els.demoError.hidden = false;
+    } catch (error) {
+      els.demoError.textContent = cleanError(error, '移除失败');
+      els.demoError.hidden = false;
+    } finally {
+      state.busy = false;
+      els.btnDemoRemove.disabled = false;
+    }
+  }
+
   function renderToday() {
     const today = state.today || {};
     const monthStatusLabels = { unset: '尚未设置月预算', safe: '预算节奏正常', warning: '预算已接近上限', over: '本月已经超出预算' };
@@ -3154,6 +3223,7 @@
     renderSubscriptions();
     renderRules();
     renderTrends();
+    renderDemo();
     renderTraining();
     renderInbox();
     renderInsights();
@@ -3209,14 +3279,15 @@
     state.goals = data.goals || { goals: [], summary: {} };
     state.capture = data.capture || { pending: [], summary: {}, channel_labels: {} };
     const [bodyState, trainingState, inboxState, focusState, subscriptions, categorize,
-           ingestFormats] = await Promise.all([
+           ingestFormats, demoState] = await Promise.all([
         api.bodyState(), api.trainingState(), api.inboxState(), api.focusState(),
-        api.subscriptions(), api.categorizeState(), api.ingestFormats(),
+        api.subscriptions(), api.categorizeState(), api.ingestFormats(), api.demoState(),
       ]);
     state.body = bodyState;
     state.focus = focusState;
     state.subscriptions = subscriptions;
     state.categorize = categorize;
+    state.demo = demoState;
     refreshTrends();
     els.ingestKinds.textContent = `认得 ${ingestFormats.formats.length} 种文件：`
       + ingestFormats.formats.map(f => f.label).join(' · ');
@@ -4466,6 +4537,8 @@
   function syncRestoreButton() {
     els.btnRestoreBackup.disabled = !state.restoreSnapshot || els.restoreConfirm.value.trim() !== '恢复';
   }
+  els.btnDemoLoad.addEventListener('click', onDemoLoad);
+  els.btnDemoRemove.addEventListener('click', onDemoRemove);
   els.trendsPeriod.addEventListener('change', refreshTrends);
   els.ingestFile.addEventListener('change', onIngestFileChosen);
   els.ingestKind.addEventListener('change', () => {

@@ -70,7 +70,7 @@ class TrendTests(unittest.TestCase):
 
         change = self.metric("expense")["change"]
         self.assertFalse(change["comparable"])
-        self.assertIn("记录天数不足", change["reason"])
+        self.assertIn("差太远", change["reason"])
 
     def test_change_is_computed_on_the_daily_average_not_the_total(self):
         """两期都记得够多时，总和不同但日均相同 → 变化应当是 0。"""
@@ -108,14 +108,28 @@ class TrendTests(unittest.TestCase):
         self.assertEqual(bucket["days"], 2)
         self.assertEqual(bucket["average"], 8.0)
 
-    def test_too_few_days_gives_a_reason_instead_of_a_number(self):
-        for offset in range(MIN_DAYS_PER_PERIOD - 1):
-            self.sleep(self.last_monday + timedelta(days=offset), 8.0)
-            self.sleep(self.monday + timedelta(days=offset), 6.0)
+    def test_a_single_day_cannot_represent_a_period(self):
+        """一个点算不出平均值。"""
+        self.sleep(self.last_monday, 8.0)
+        self.sleep(self.monday, 6.0)
 
         change = self.metric("sleep_hours")["change"]
         self.assertFalse(change["comparable"])
-        self.assertTrue(change["reason"])
+        self.assertIn(f"{MIN_DAYS_PER_PERIOD} 天", change["reason"])
+
+    def test_sparse_but_balanced_records_are_still_comparable(self):
+        """一周只练两次力量、一周只量两次体重，都是正常的记录方式。
+
+        以前的写法要求每期满 3 天，等于把这类人整个排除在趋势之外——
+        他们记得再规律也永远看不到走势。挡的应该是悬殊，不是稀疏。
+        """
+        for offset in (0, 3):
+            self.sleep(self.last_monday + timedelta(days=offset), 8.0)
+            self.sleep(self.monday + timedelta(days=offset), 7.0)
+
+        change = self.metric("sleep_hours")["change"]
+        self.assertTrue(change["comparable"], change.get("reason"))
+        self.assertEqual(change["delta"], -1.0)
 
     # ---------- 形状与边界 ----------
 

@@ -17,6 +17,8 @@ from backend.core.db import db
 from backend.modules.ledger import (
     compute_monthly,
     compute_stats,
+    create_recurring_bill,
+    create_savings_goal,
     create_transaction,
     get_accounts,
     get_annual_report,
@@ -27,6 +29,8 @@ from backend.modules.ledger import (
     get_subscription_overview,
     get_today_overview,
     parse_quick_entry,
+    save_category_budget,
+    save_planning_settings,
 )
 
 router = APIRouter()
@@ -261,28 +265,13 @@ def subscription_overview():
 
 @router.post("/api/bills")
 def add_recurring_bill(body: RecurringBillIn):
-    name = body.name.strip()
-    if not name:
-        raise HTTPException(400, "bill name is required")
     with db() as conn:
-        if not conn.execute(
-            "SELECT 1 FROM accounts WHERE id = ? AND is_active = 1", (body.account_id,)
-        ).fetchone():
-            raise HTTPException(400, "invalid account")
-        anchor = body.anchor_month
-        if body.cycle != "monthly" and anchor is None:
-            anchor = date.today().month  # 没指定就以建单当月为锚点
-        cur = conn.execute(
-            """INSERT INTO recurring_bills
-               (name, amount, day_of_month, category, account_id, note, is_active,
-                created_at, cycle, anchor_month)
-               VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)""",
-            (name, body.amount, body.day_of_month, body.category,
-             body.account_id, body.note.strip(), datetime.now().isoformat(),
-             body.cycle, anchor),
-        )
+        created = create_recurring_bill(
+            conn, name=body.name, amount=body.amount, day_of_month=body.day_of_month,
+            category=body.category, account_id=body.account_id,
+            cycle=body.cycle, anchor_month=body.anchor_month, note=body.note)
         return {
-            "bill_id": cur.lastrowid,
+            "bill_id": created["id"],
             "calendar": get_financial_calendar(conn),
             "subscriptions": get_subscription_overview(conn),
         }
@@ -395,19 +384,12 @@ def undo_recurring_bill_payment(bill_id: int, month_key: str):
 @router.post("/api/planning/settings")
 def set_planning_settings(body: PlanningSettingsIn):
     with db() as conn:
-        conn.execute(
-            """INSERT INTO planning_settings
-               (id, monthly_allowance_amount, allowance_day, monthly_spending_budget, updated_at)
-               VALUES (1, ?, ?, ?, ?)
-               ON CONFLICT(id) DO UPDATE SET
-                 monthly_allowance_amount = excluded.monthly_allowance_amount,
-                 allowance_day = excluded.allowance_day,
-                 monthly_spending_budget = excluded.monthly_spending_budget,
-                 updated_at = excluded.updated_at""",
-            (body.monthly_allowance_amount, body.allowance_day,
-             body.monthly_spending_budget, datetime.now().isoformat()),
+        return save_planning_settings(
+            conn,
+            monthly_allowance_amount=body.monthly_allowance_amount,
+            allowance_day=body.allowance_day,
+            monthly_spending_budget=body.monthly_spending_budget,
         )
-        return get_planning(conn)
 
 
 @router.post("/api/planning/semester")
@@ -446,41 +428,22 @@ def set_category_budgets(body: CategoryBudgetsIn):
     if any(float(amount) < 0 for amount in body.budgets.values()):
         raise HTTPException(400, "budget amount must be non-negative")
     with db() as conn:
-        now = datetime.now().isoformat()
         for category in EXPENSE_CATEGORIES:
-            amount = round(float(body.budgets.get(category, 0) or 0), 2)
-            if amount <= 0:
-                conn.execute("DELETE FROM category_budgets WHERE category = ?", (category,))
-            else:
-                conn.execute(
-                    """INSERT INTO category_budgets (category, amount, updated_at)
-                       VALUES (?, ?, ?)
-                       ON CONFLICT(category) DO UPDATE SET
-                         amount = excluded.amount, updated_at = excluded.updated_at""",
-                    (category, amount, now),
-                )
+            save_category_budget(
+                conn, category=category,
+                amount=round(float(body.budgets.get(category, 0) or 0), 2))
         return get_planning(conn)
 
 
 @router.post("/api/goals")
 def add_savings_goal(body: SavingsGoalIn):
-    name = body.name.strip()
-    if not name:
-        raise HTTPException(400, "goal name is required")
-    target_date = body.target_date or None
-    if target_date:
-        date.fromisoformat(target_date)
     with db() as conn:
-        cur = conn.execute(
-            """INSERT INTO savings_goals
-               (name, target_amount, saved_amount, target_date, is_active, created_at)
-               VALUES (?, ?, ?, ?, 1, ?)""",
-            (name, body.target_amount, body.saved_amount, target_date,
-             datetime.now().isoformat()),
-        )
+        created = create_savings_goal(
+            conn, name=body.name, target_amount=body.target_amount,
+            saved_amount=body.saved_amount, target_date=body.target_date or None)
         planning = get_planning(conn)
         return {
-            "goal": next(goal for goal in planning["goals"] if goal["id"] == cur.lastrowid),
+            "goal": next(goal for goal in planning["goals"] if goal["id"] == created["id"]),
             **planning,
         }
 

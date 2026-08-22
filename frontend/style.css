@@ -2101,6 +2101,15 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
 .search-panel { grid-column: 1 / -1; }
 .rules-panel { grid-column: 1 / -1; }
 .ingest-panel { grid-column: 1 / -1; }
+.demo-panel { grid-column: 1 / -1; }
+.demo-status { color: var(--text-3); font-size: 11px; white-space: nowrap; }
+.demo-actions { display: flex; gap: 7px; margin-bottom: 8px; }
+.demo-actions button {
+  height: 30px; padding: 0 14px; border-radius: 6px; font-size: 10.5px;
+  color: #9cc3ff; background: rgba(156,195,255,.055);
+}
+.demo-actions button:hover { background: rgba(156,195,255,.1); }
+.demo-actions button:disabled { opacity: .5; }
 
 /* 趋势 */
 .trends-panel select {

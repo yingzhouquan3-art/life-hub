@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=20260821-trends-1">
+  <link rel="stylesheet" href="./style.css?v=20260822-demo-1">
 </head>
 <body>
 
@@ -718,6 +718,26 @@
         </section>
 
         <div class="data-grid">
+          <section class="dashboard-panel demo-panel">
+            <header>
+              <div>
+                <h2>示例数据</h2>
+                <p>库是空的时候，先借 60 天的记录看看这个平台长什么样</p>
+              </div>
+              <span class="demo-status" id="demo-status"></span>
+            </header>
+            <div class="demo-actions">
+              <button id="btn-demo-load">装入示例数据</button>
+              <button class="search-reset" id="btn-demo-remove" hidden>移除示例数据</button>
+            </div>
+            <p class="plan-status" id="demo-error" hidden></p>
+            <p class="import-note">
+              它<b>不会删除你已有的任何记录</b>，每写一条都登记在册，移除时按册精确删除。
+              数据刻意造得不完美——有的日子没记，有的指标缺一块，
+              这样「趋势」和「数据健康度」才演示得出它们真正的用处。
+            </p>
+          </section>
+
           <section class="dashboard-panel ingest-panel">
             <header>
               <div>
@@ -1298,6 +1318,6 @@
   </div>
 
   <script src="./grid.js"></script>
-  <script src="./app.js?v=20260821-trends-1"></script>
+  <script src="./app.js?v=20260822-demo-1"></script>
 </body>
 </html>

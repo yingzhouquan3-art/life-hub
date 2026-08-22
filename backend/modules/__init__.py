@@ -17,6 +17,7 @@ from backend.modules import (
     body,
     capture,
     categorize,
+    demo,
     fitness,
     goals,
     inbox,
@@ -44,6 +45,8 @@ MODULES = (
     # capture 的 pending_captures 外键指向 transactions，必须排在 ledger 之后
     capture.MODULE,
     categorize.MODULE,
+    # demo_records 只登记「哪些记录是示例数据」，不被任何表引用，放最后
+    demo.MODULE,
 )
 
 SNAPSHOT_COLUMNS = registry.snapshot_columns(MODULES)

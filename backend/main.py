@@ -28,6 +28,7 @@ from fastapi.staticfiles import StaticFiles
 from backend.api import auth as auth_api
 from backend.api import body as body_api
 from backend.api import capture as capture_api
+from backend.api import demo as demo_api
 from backend.api import categorize as categorize_api
 from backend.api import fitness as fitness_api
 from backend.api import goals as goals_api
@@ -142,6 +143,7 @@ app.include_router(insights_api.router)
 app.include_router(statements_api.router)
 app.include_router(health_import_api.router)
 app.include_router(ingest_api.router)
+app.include_router(demo_api.router)
 
 
 # ---------- Static ----------

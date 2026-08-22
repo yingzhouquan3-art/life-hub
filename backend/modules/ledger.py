@@ -419,6 +419,82 @@ def get_semester(conn) -> dict:
     return semester
 
 
+def save_planning_settings(conn, *, monthly_allowance_amount: float,
+                           allowance_day: int, monthly_spending_budget: float) -> dict:
+    """保存生活费周期与预算。整表只有一行，冲突就更新。
+
+    校验留在接口层（Pydantic 已经限定了取值范围），这里只负责落库——
+    模块拥有自己的表，写入就该在模块里，不该散在路由里。
+    """
+    conn.execute(
+        """INSERT INTO planning_settings
+           (id, monthly_allowance_amount, allowance_day, monthly_spending_budget, updated_at)
+           VALUES (1, ?, ?, ?, ?)
+           ON CONFLICT(id) DO UPDATE SET
+             monthly_allowance_amount = excluded.monthly_allowance_amount,
+             allowance_day = excluded.allowance_day,
+             monthly_spending_budget = excluded.monthly_spending_budget,
+             updated_at = excluded.updated_at""",
+        (monthly_allowance_amount, allowance_day, monthly_spending_budget,
+         datetime.now().isoformat()),
+    )
+    return get_planning(conn)
+
+
+def create_savings_goal(conn, *, name: str, target_amount: float,
+                        saved_amount: float = 0.0, target_date: Optional[str] = None) -> dict:
+    name = name.strip()
+    if not name:
+        raise HTTPException(400, "goal name is required")
+    if target_date:
+        date.fromisoformat(target_date)
+    cur = conn.execute(
+        """INSERT INTO savings_goals
+           (name, target_amount, saved_amount, target_date, is_active, created_at)
+           VALUES (?, ?, ?, ?, 1, ?)""",
+        (name, target_amount, saved_amount, target_date or None, datetime.now().isoformat()),
+    )
+    return dict(conn.execute(
+        "SELECT * FROM savings_goals WHERE id = ?", (cur.lastrowid,)).fetchone())
+
+
+def create_recurring_bill(conn, *, name: str, amount: float, day_of_month: int,
+                          category: str, account_id: int, cycle: str = "monthly",
+                          anchor_month: Optional[int] = None, note: str = "") -> dict:
+    name = name.strip()
+    if not name:
+        raise HTTPException(400, "bill name is required")
+    if not conn.execute(
+        "SELECT 1 FROM accounts WHERE id = ? AND is_active = 1", (account_id,)
+    ).fetchone():
+        raise HTTPException(400, "invalid account")
+    if cycle != "monthly" and anchor_month is None:
+        anchor_month = date.today().month  # 没指定就以建单当月为锚点
+    cur = conn.execute(
+        """INSERT INTO recurring_bills
+           (name, amount, day_of_month, category, account_id, note, is_active,
+            created_at, cycle, anchor_month)
+           VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?, ?)""",
+        (name, amount, day_of_month, category, account_id, note.strip(),
+         datetime.now().isoformat(), cycle, anchor_month),
+    )
+    return dict(conn.execute(
+        "SELECT * FROM recurring_bills WHERE id = ?", (cur.lastrowid,)).fetchone())
+
+
+def save_category_budget(conn, *, category: str, amount: float) -> None:
+    """金额为 0 表示取消这一类的预算。"""
+    if amount <= 0:
+        conn.execute("DELETE FROM category_budgets WHERE category = ?", (category,))
+        return
+    conn.execute(
+        """INSERT INTO category_budgets (category, amount, updated_at) VALUES (?, ?, ?)
+           ON CONFLICT(category) DO UPDATE SET
+             amount = excluded.amount, updated_at = excluded.updated_at""",
+        (category, amount, datetime.now().isoformat()),
+    )
+
+
 def get_planning(conn) -> dict:
     row = conn.execute("SELECT * FROM planning_settings WHERE id = 1").fetchone()
     settings = dict(row) if row else {
