@@ -188,5 +188,23 @@ class LauncherScriptTests(unittest.TestCase):
         self.assertIn("StartWhenAvailable", setup)
 
 
+class ImportSideEffectTests(unittest.TestCase):
+    """导入一个模块不该写用户的磁盘。
+
+    init_db() 和 startup_checks() 曾经写在 backend/main.py 的模块层：
+    任何人 import backend.main —— 测试脚本、命令行工具、编辑器的自动补全 ——
+    都会在默认数据目录里建表，并可能落一份快照。这一条守住它别回去。
+    """
+
+    def test_startup_work_happens_in_lifespan_not_at_import(self):
+        source = (ROOT / "backend" / "main.py").read_text(encoding="utf-8")
+        body = re.sub(r"#.*", "", source)
+        for call in ("init_db()", "startup_checks()"):
+            with self.subTest(call=call):
+                # 模块层（顶格）调用一律不允许，只能出现在缩进的函数体里
+                self.assertNotRegex(body, rf"(?m)^{re.escape(call)}\s*$")
+        self.assertIn("lifespan", source)
+
+
 if __name__ == "__main__":
     unittest.main()

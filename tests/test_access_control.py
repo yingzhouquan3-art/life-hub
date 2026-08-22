@@ -13,6 +13,7 @@ import urllib.request
 from pathlib import Path
 
 from backend.core import access, config
+from backend.core import db as db_core
 
 
 class AccessRuleTests(unittest.TestCase):
@@ -168,6 +169,13 @@ class LiveServerTests(unittest.TestCase):
         # 端口写死会撞上本机正在跑的实例，请求就打到别人身上了：
         # 那会让这组守门禁的测试给出假结果。改成让系统分配一个空闲端口，
         # 并断言服务真的起来了，起不来就直接失败，不要沉默地测别人。
+        # 起真服务前先把数据库指到临时目录：这组测试会真的读写库，
+        # 不重定向的话它跑的是用户自己的账本。
+        cls.original_db_path = db_core.current_path()
+        cls.db_dir = tempfile.TemporaryDirectory()
+        db_core.use_database(Path(cls.db_dir.name) / "ledger.db")
+        main.init_db()
+
         cls.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         cls.sock.bind(("127.0.0.1", 0))
         cls.sock.listen(64)
@@ -188,6 +196,8 @@ class LiveServerTests(unittest.TestCase):
     def tearDownClass(cls):
         cls.server.should_exit = True
         cls.thread.join(timeout=5)
+        db_core.use_database(cls.original_db_path)
+        cls.db_dir.cleanup()
 
     def get(self, path):
         with urllib.request.urlopen(f"http://127.0.0.1:{self.port}{path}", timeout=10) as response:

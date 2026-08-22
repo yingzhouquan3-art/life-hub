@@ -20,6 +20,8 @@
 """
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
@@ -78,12 +80,23 @@ def startup_checks():
         print(f"[启动] 已自动备份：{created['name']}", flush=True)
 
 
-init_db()
-startup_checks()
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """建表、自检、自动备份都在服务真正启动时做，不在导入时做。
+
+    这两行以前写在模块层，于是**只要有人 import backend.main，就会在默认
+    数据目录里建表并可能落一份快照**——测试脚本、命令行工具、编辑器的
+    自动补全，全都算。导入一个模块不该写用户的磁盘。
+
+    需要在没有服务的情况下建表时（比如测试），显式调用 init_db()。
+    """
+    init_db()
+    startup_checks()
+    yield
 
 
 # ---------- App ----------
-app = FastAPI(title="我的生活中枢", docs_url="/api/docs")
+app = FastAPI(title="我的生活中枢", docs_url="/api/docs", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
