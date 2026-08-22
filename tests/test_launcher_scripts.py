@@ -129,6 +129,64 @@ class LauncherScriptTests(unittest.TestCase):
         launcher = (ROOT / "启动并允许手机访问.cmd").read_bytes().decode("utf-8", errors="replace")
         self.assertIn("LIFE_HUB_HOST=auto", launcher.replace('"', ""))
 
+    # ---------- 每日提醒 ----------
+
+    def reminder(self):
+        return (ROOT / "windows" / "remind.ps1").read_bytes().decode("utf-8-sig")
+
+    def test_reminder_only_speaks_when_there_is_a_reason(self):
+        """天天准点响的提醒，两周之内就会被无视。
+
+        必须先问服务端「今天记了没有」，记过了就闭嘴——否则它训练用户
+        忽略自己，之后真正该看的提醒也一起被忽略了。
+        """
+        script = self.reminder()
+        self.assertIn("/api/life/overview", script)
+        self.assertIn("completed_signals", script)
+        # 判断必须在弹通知之前
+        self.assertLess(script.index("completed_signals"), script.rindex("Show-Toast"))
+
+    def test_reminder_stays_quiet_when_the_service_is_down(self):
+        """服务没跑多半说明人不在电脑前，弹给空房间看没有意义。"""
+        script = self.reminder()
+        self.assertIn("catch", script)
+        self.assertRegex(script, r"catch\s*\{[^}]*exit 0")
+
+    def test_reminder_needs_no_extra_module(self):
+        """要用户先装个模块才能收到提醒，等于这个功能不存在。"""
+        script = self.reminder()
+        self.assertNotIn("BurntToast", script)
+        self.assertNotIn("Install-Module", script)
+        self.assertIn("Windows.UI.Notifications", script)
+
+    def test_reminder_script_has_no_stray_control_characters(self):
+        """写这个脚本时踩过一次：\v 被当成垂直制表符写进了文件，
+        AppId 那一行从中间断开，而肉眼完全看不出来。"""
+        raw = (ROOT / "windows" / "remind.ps1").read_bytes()
+        for bad in (0x0b, 0x0c, 0x00, 0x1a):
+            with self.subTest(byte=hex(bad)):
+                self.assertNotIn(bytes([bad]), raw)
+
+    def test_setup_and_remove_agree_on_the_task_name(self):
+        """名字对不上的话，「移除」会说没设置过，而提醒继续每天弹。"""
+        setup = (ROOT / "windows" / "setup-reminder.ps1").read_bytes().decode("utf-8-sig")
+        remove = (ROOT / "windows" / "remove-reminder.ps1").read_bytes().decode("utf-8-sig")
+        pattern = re.compile(r'\$TaskName\s*=\s*"([^"]+)"')
+        self.assertEqual(pattern.search(setup).group(1), pattern.search(remove).group(1))
+
+    def test_setup_does_not_need_administrator(self):
+        """要 UAC 的话每次改时间都得点一次同意，而它根本不需要。"""
+        setup = (ROOT / "windows" / "setup-reminder.ps1").read_bytes().decode("utf-8-sig")
+        self.assertNotIn("RunAsAdministrator", setup)
+        self.assertNotIn("-User SYSTEM", setup)
+        self.assertNotIn("Start-Process -Verb RunAs", setup)
+
+    def test_reminder_survives_a_laptop_that_sleeps(self):
+        """合盖是常态。电池上被跳过、错过不补，等于大部分日子都不会响。"""
+        setup = (ROOT / "windows" / "setup-reminder.ps1").read_bytes().decode("utf-8-sig")
+        self.assertIn("AllowStartIfOnBatteries", setup)
+        self.assertIn("StartWhenAvailable", setup)
+
 
 if __name__ == "__main__":
     unittest.main()
