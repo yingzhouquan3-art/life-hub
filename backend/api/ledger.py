@@ -31,6 +31,7 @@ from backend.modules.ledger import (
     parse_quick_entry,
     save_category_budget,
     save_planning_settings,
+    update_transaction,
 )
 
 router = APIRouter()
@@ -119,6 +120,23 @@ class ImportTransactionIn(BaseModel):
 class ImportBatchIn(BaseModel):
     filename: str = Field("statement.csv", min_length=1, max_length=255)
     rows: list[ImportTransactionIn] = Field(..., min_length=1, max_length=2000)
+
+
+class TransactionPatchIn(BaseModel):
+    """只带上要改的字段。没带的原样保留，所以每个字段都可以留空。"""
+
+    occurred_on: Optional[str] = None
+    type: Optional[Literal["income", "expense"]] = None
+    amount: Optional[float] = Field(None, gt=0)
+    source: Optional[
+        Literal["family_support", "scholarship", "part_time", "project", "investment", "other"]
+    ] = None
+    category: Optional[
+        Literal["food", "transport", "study", "housing", "medical",
+                "entertainment", "social", "digital", "other"]
+    ] = None
+    account_id: Optional[int] = None
+    note: Optional[str] = Field(None, max_length=120)
 
 
 class RecurringBillIn(BaseModel):
@@ -471,6 +489,28 @@ def delete_savings_goal(goal_id: int):
             raise HTTPException(404, "goal not found")
         conn.execute("UPDATE savings_goals SET is_active = 0 WHERE id = ?", (goal_id,))
         return get_planning(conn)
+
+
+@router.patch("/api/transactions/{transaction_id}")
+def patch_transaction(transaction_id: int, body: TransactionPatchIn):
+    """改一笔已经记好的账。只改传进来的字段。
+
+    没有这个的时候，把 16.5 记成 165 的唯一出路是删掉重记——
+    纠个错要走一遍删除，很容易顺手删错别的。
+    """
+    given = body.model_dump(exclude_unset=True)
+    if not given:
+        raise HTTPException(400, "没有要修改的字段")
+    with db() as conn:
+        transaction = update_transaction(conn, transaction_id, **given)
+        return {
+            "transaction": transaction,
+            "stats": compute_stats(conn),
+            "accounts": get_accounts(conn),
+            "monthly": compute_monthly(conn),
+            "planning": get_planning(conn),
+            "today": get_today_overview(conn),
+        }
 
 
 @router.post("/api/import/transactions")

@@ -419,6 +419,90 @@ def get_semester(conn) -> dict:
     return semester
 
 
+_UNSET = object()  # 「这个字段没传」和「传了 None」是两回事
+
+
+def update_transaction(
+    conn, transaction_id: int, *, occurred_on=_UNSET, type=_UNSET, amount=_UNSET,
+    source=_UNSET, category=_UNSET, account_id=_UNSET, note=_UNSET,
+) -> dict:
+    """改一笔已经记好的账。只改传进来的字段，其余原样保留。
+
+    没有这个功能的时候，把 16.5 记成 165 的唯一出路是删掉重记——
+    一个纠错动作要走一遍删除，这既麻烦又让「删除」变成日常操作。
+
+    两条边界：
+
+    - **由固定账单「记为已支付」生成的交易不给改。** 那条记录同时被
+      recurring_bill_payments 按月引用着，这里改了日期，账单日历那边仍然
+      认为你付的是原来那个月，两边会对不上而且没人看得出来。要改就先在
+      日历里撤销支付，再重新记。
+    - 改动**不学习分类规则**。规则只在用户逐条确认捕获时学；一次改判
+      不该悄悄改变以后所有同名商户的预选。
+    """
+    row = conn.execute(
+        "SELECT * FROM transactions WHERE id = ?", (transaction_id,)).fetchone()
+    if not row:
+        raise HTTPException(404, "transaction not found")
+
+    payment = conn.execute(
+        "SELECT bill_id, month FROM recurring_bill_payments WHERE transaction_id = ?",
+        (transaction_id,),
+    ).fetchone()
+    if payment:
+        raise HTTPException(
+            400,
+            f"这笔是固定账单在 {payment['month']} 的支付记录，改它会让账单日历对不上。"
+            "请先在日历里撤销这次支付，再重新记一笔。",
+        )
+
+    current = dict(row)
+    new_type = current["type"] if type is _UNSET else type
+    if new_type not in ("income", "expense"):
+        raise HTTPException(400, "type must be income or expense")
+
+    new_when = current["occurred_on"] if occurred_on is _UNSET else occurred_on
+    date.fromisoformat(new_when)
+
+    new_amount = current["amount"] if amount is _UNSET else amount
+    if new_amount is None or float(new_amount) <= 0:
+        raise HTTPException(400, "金额必须大于 0")
+
+    # 方向变了就必须重新归一：收入没有支出分类，支出也没有收入来源。
+    # 沿用旧值会留下 type='income' 而 category='food' 这种自相矛盾的行。
+    changed_type = new_type != current["type"]
+    if new_type == "income":
+        new_source = (source if source is not _UNSET and source else
+                      ("family_support" if changed_type else current["source"]))
+        new_category = "income"
+    else:
+        new_source = "expense"
+        new_category = (category if category is not _UNSET and category else
+                        ("other" if changed_type else current["category"]))
+
+    new_account = current["account_id"] if account_id is _UNSET else account_id
+    if new_account is not None and not conn.execute(
+        "SELECT 1 FROM accounts WHERE id = ? AND is_active = 1", (new_account,)
+    ).fetchone():
+        raise HTTPException(400, "invalid account")
+
+    new_note = current["note"] if note is _UNSET else (note or "")
+
+    conn.execute(
+        """UPDATE transactions
+           SET occurred_on = ?, type = ?, source = ?, category = ?,
+               account_id = ?, amount = ?, note = ?
+           WHERE id = ?""",
+        (new_when, new_type, new_source, new_category, new_account,
+         round(float(new_amount), 2), new_note, transaction_id),
+    )
+    return dict(conn.execute(
+        """SELECT t.*, a.name AS account_name FROM transactions t
+           LEFT JOIN accounts a ON a.id = t.account_id WHERE t.id = ?""",
+        (transaction_id,),
+    ).fetchone())
+
+
 def save_planning_settings(conn, *, monthly_allowance_amount: float,
                            allowance_day: int, monthly_spending_budget: float) -> dict:
     """保存生活费周期与预算。整表只有一行，冲突就更新。

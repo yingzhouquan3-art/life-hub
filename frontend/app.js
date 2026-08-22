@@ -148,6 +148,14 @@
       return response.json();
     },
     delTx:    (id) => fetch(`${API}/transactions/${id}`, { method: 'DELETE' }).then(r => r.json()),
+    patchTx: async (id, body) => {
+      const response = await fetch(`${API}/transactions/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) throw new Error(`${response.status} ${await response.text()}`);
+      return response.json();
+    },
     previewStatement: (body) => post(`${API}/statements/preview`, body),
     focusState: () => fetch(`${API}/study/focus`).then(r => r.json()),
     startFocus: (body) => post(`${API}/study/focus`, body),
@@ -1591,7 +1599,24 @@
   }
 
   function cleanError(error, fallback) {
-    return String(error?.message || fallback).replace(/^\d+\s*/, '');
+    // 后端把人话放在 JSON 的 detail 里，抛出来的 Error.message 长这样：
+    //   422 {"detail":"金额必须大于 0"}
+    // 不拆开的话，用户看到的就是一串带引号的 JSON——那等于没写这句提示。
+    const raw = String(error?.message || fallback).replace(/^\d+\s*/, '').trim();
+    if (!raw.startsWith('{') && !raw.startsWith('[')) return raw;
+    try {
+      const parsed = JSON.parse(raw);
+      const detail = parsed?.detail;
+      if (typeof detail === 'string') return detail;
+      // FastAPI 的字段校验错误是一个数组，每项带 msg
+      if (Array.isArray(detail)) {
+        const messages = detail.map(item => item?.msg).filter(Boolean);
+        if (messages.length) return messages.join('；');
+      }
+      return fallback;
+    } catch (_) {
+      return raw;
+    }
   }
 
   // ---------- 番茄钟 ----------
@@ -2692,6 +2717,68 @@
     renderDataCenter();
   }
 
+  // ---------- 就地修改一笔交易 ----------
+  // 在这之前，把 16.5 记成 165 的唯一出路是删掉重记——纠个错要走一遍删除，
+  // 很容易顺手删错别的。就地改，改完原地看到结果。
+  function openTxEditor(li, tx) {
+    if (li.classList.contains('is-editing')) return;
+    li.classList.add('is-editing');
+    const isIncome = tx.type === 'income';
+    const options = isIncome ? SOURCE_LABELS : CATEGORY_LABELS;
+    const selected = isIncome ? tx.source : tx.category;
+
+    const form = document.createElement('form');
+    form.className = 'tx-edit';
+    form.innerHTML = `
+      <label><span>日期</span><input name="occurred_on" type="date" value="${tx.occurred_on}" required></label>
+      <label><span>金额</span><input name="amount" type="number" min="0.01" step="0.01" value="${tx.amount}" required></label>
+      <label><span>${isIncome ? '来源' : '分类'}</span><select name="${isIncome ? 'source' : 'category'}">${
+        Object.entries(options).map(([key, label]) =>
+          `<option value="${key}"${key === selected ? ' selected' : ''}>${label}</option>`).join('')
+      }</select></label>
+      <label class="tx-edit__note"><span>备注</span><input name="note" type="text" maxlength="120" value="${escapeHtml(tx.note || '')}"></label>
+      <div class="tx-edit__actions">
+        <button type="submit">保存</button>
+        <button type="button" data-cancel>取消</button>
+      </div>
+      <p class="tx-edit__error" hidden></p>`;
+    li.appendChild(form);
+    form.querySelector('[name="amount"]').focus();
+
+    const close = () => { li.classList.remove('is-editing'); form.remove(); };
+    form.querySelector('[data-cancel]').addEventListener('click', close);
+    form.addEventListener('keydown', (event) => { if (event.key === 'Escape') close(); });
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      if (state.busy) return;
+      const data = new FormData(form);
+      // 只把真的改了的字段发过去：没改的不该出现在请求里，
+      // 免得一次「改金额」顺手把别的字段也重写一遍。
+      const patch = {};
+      for (const [key, raw] of data.entries()) {
+        const value = key === 'amount' ? Number(raw) : String(raw);
+        const before = key === 'amount' ? Number(tx.amount) : String(tx[key] ?? '');
+        if (value !== before) patch[key] = value;
+      }
+      if (!Object.keys(patch).length) { close(); return; }
+
+      const error = form.querySelector('.tx-edit__error');
+      error.hidden = true;
+      state.busy = true;
+      try {
+        await api.patchTx(tx.id, patch);
+        close();
+        await loadAndPaint();
+      } catch (err) {
+        error.textContent = cleanError(err, '改不了这笔');
+        error.hidden = false;
+      } finally {
+        state.busy = false;
+      }
+    });
+  }
+
   function renderTxList() {
     const items = state.transactions;
     els.txCount.textContent = items.length;
@@ -2715,11 +2802,15 @@
           <div class="tx-item__date"><span class="tx-item__source">${escapeHtml(accountLabel)}</span><span class="tx-item__source">${escapeHtml(sourceLabel)}</span>${t.occurred_on}</div>
         </div>
         <div class="tx-item__amount">${t.type === 'income' ? '+' : '−'}${fmtCNY(t.amount)}</div>
+        <button class="tx-item__edit" title="修改" aria-label="修改这笔交易">
+          <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/></svg>
+        </button>
         <button class="tx-item__del" title="删除" aria-label="删除交易">
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/></svg>
         </button>
       `;
       li.querySelector('.tx-item__del').addEventListener('click', () => onDelete(t.id));
+      li.querySelector('.tx-item__edit').addEventListener('click', () => openTxEditor(li, t));
       frag.appendChild(li);
     }
     els.txItems.appendChild(frag);

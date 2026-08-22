@@ -124,19 +124,26 @@ def get_demo_state(conn) -> dict:
            FROM demo_records GROUP BY batch ORDER BY loaded_at DESC"""
     ).fetchall()
     batches = [dict(row) for row in rows]
-    # 登记册按文本存主键（category_budgets 的主键就是文本），
-    # 这里比对时两边都转成字符串——不然 ("transactions", 5) 永远对不上
-    # ("transactions", "5")，示例记录会被整批误算成用户自己的记录。
-    demo_ids = {
-        (r["table_name"], str(r["record_id"]))
-        for r in conn.execute("SELECT table_name, record_id FROM demo_records")
-    }
+    # 「有多少是用户自己的记录」在每次开页面时都要算，所以交给 SQL 去做：
+    # 早先的写法是把所有 id 读进内存做集合差，几万条记录时那是每次加载都
+    # 全表扫六张表。这里靠 demo_records 上的索引走 NOT EXISTS。
+    #
+    # 主键统一按文本比对——登记册里存的是文本（category_budgets 的主键
+    # 本来就是文本），不转的话 5 永远对不上 "5"，示例记录会被整批误算成
+    # 用户自己的记录。
     real = 0
     for table in ("transactions", "fitness_sessions", "study_sessions",
                   "recovery_checkins", "nutrition_entries", "body_measurements"):
-        for row in conn.execute(f"SELECT id FROM {table}"):
-            if (table, str(row["id"])) not in demo_ids:
-                real += 1
+        if not batches:
+            real += conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            continue
+        real += conn.execute(
+            f"""SELECT COUNT(*) FROM {table} t
+                WHERE NOT EXISTS (
+                    SELECT 1 FROM demo_records d
+                    WHERE d.table_name = ? AND d.record_id = CAST(t.id AS TEXT))""",
+            (table,),
+        ).fetchone()[0]
     return {
         "loaded": bool(batches),
         "batches": batches,
@@ -364,6 +371,7 @@ CREATE TABLE IF NOT EXISTS demo_records (
   created_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_demo_batch ON demo_records(batch);
+CREATE INDEX IF NOT EXISTS idx_demo_lookup ON demo_records(table_name, record_id);
 """
 
 MODULE = LifeModule(

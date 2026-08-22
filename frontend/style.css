@@ -1266,6 +1266,41 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
 .tx-item:focus-within .tx-item__del { opacity: 1; }
 .tx-item__del:hover { color: #ff7a7a; background: rgba(255, 122, 122, 0.10); }
 
+/* 就地修改一笔交易 */
+.tx-item__edit {
+  width: 28px; height: 28px;
+  display: grid; place-items: center;
+  color: var(--text-4);
+  border-radius: var(--r-sm);
+  opacity: 0;
+  transition: opacity .2s var(--ease-out), color .15s var(--ease-out), background .15s var(--ease-out);
+}
+.tx-item:hover .tx-item__edit,
+.tx-item:focus-within .tx-item__edit { opacity: 1; }
+.tx-item__edit:hover { color: #9cc3ff; background: rgba(156, 195, 255, 0.10); }
+.tx-item.is-editing { flex-wrap: wrap; align-items: flex-start; }
+.tx-item.is-editing .tx-item__edit { opacity: .35; pointer-events: none; }
+.tx-edit {
+  flex: 0 0 100%;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px;
+  margin-top: 8px; padding-top: 9px; border-top: 1px solid var(--line-1);
+}
+.tx-edit label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.tx-edit label span { color: var(--text-4); font-size: 9.5px; }
+.tx-edit input, .tx-edit select {
+  height: 28px; padding: 0 7px; border: 1px solid var(--line-1); border-radius: 6px;
+  color: var(--text-1); background: var(--bg-input); font-size: 11px; min-width: 0;
+}
+.tx-edit__note { grid-column: 1 / -1; }
+.tx-edit__actions { grid-column: 1 / -1; display: flex; gap: 7px; }
+.tx-edit__actions button {
+  height: 28px; padding: 0 14px; border-radius: 6px; font-size: 10.5px;
+  color: #9cc3ff; background: rgba(156,195,255,.055);
+}
+.tx-edit__actions button[data-cancel] { color: var(--text-3); background: transparent; border: 1px solid var(--line-1); }
+.tx-edit__actions button:hover { background: rgba(156,195,255,.1); }
+.tx-edit__error { grid-column: 1 / -1; margin: 0; color: #ff9c9c; font-size: 10px; }
+
 /* ============================================
    右 · 人生方格 stage
    ============================================ */

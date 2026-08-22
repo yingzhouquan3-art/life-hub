@@ -211,6 +211,23 @@ class FrontendWiringTests(unittest.TestCase):
         self.assertTrue(wanted, "没解析到任何 els 引用，说明这条守卫失效了")
         self.assertEqual(sorted(wanted - ids), [], "app.js 引用了 index.html 里不存在的 id")
 
+    def test_error_messages_are_unwrapped_before_being_shown(self):
+        """后端把人话放在 JSON 的 detail 里。前端不拆开的话，
+        用户看到的是 {"detail":"金额必须大于 0"} —— 等于那句提示白写了。"""
+        root = Path(__file__).resolve().parents[1] / "frontend"
+        js = (root / "app.js").read_text(encoding="utf-8")
+        start = js.index("function cleanError")
+        body = js[start:start + 900]
+        self.assertIn("JSON.parse", body)
+        self.assertIn("detail", body)
+
+    def test_transactions_can_be_edited_from_the_list(self):
+        """只能删了重记的话，纠错要走一遍删除，很容易顺手删错别的。"""
+        root = Path(__file__).resolve().parents[1] / "frontend"
+        js = (root / "app.js").read_text(encoding="utf-8")
+        self.assertIn("openTxEditor", js)
+        self.assertIn("patchTx", js)
+
     def test_panels_with_a_backend_are_actually_rendered(self):
         """有接口没入口是这个项目的老毛病，补一条就在这里记一条。"""
         root = Path(__file__).resolve().parents[1] / "frontend"
