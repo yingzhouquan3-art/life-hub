@@ -117,6 +117,7 @@ h1, h2, h3 { margin: 0; font-weight: 600; }
   border-right: 1px solid var(--line-1);
   background: rgba(7, 7, 12, .88);
   backdrop-filter: blur(20px);
+  overflow: hidden;
 }
 .platform-rail__brand {
   width: 44px; height: 44px; border-radius: 15px;
@@ -125,10 +126,30 @@ h1, h2, h3 { margin: 0; font-weight: 600; }
   background: linear-gradient(145deg, var(--gold-bloom), var(--gold-core));
   box-shadow: 0 0 24px rgba(255, 209, 102, .22);
 }
-.platform-rail__items { display: flex; flex-direction: column; gap: 8px; width: 100%; margin-top: 34px; }
+/* 十五个模块在矮屏上放不下（1366×768 的浏览器可用高度只有 ~600px）。
+   以前 overflow 是 visible，超出的「收集箱」「洞察」直接被切掉，
+   只能把整个页面缩小才够得到。现在中间这段可以滚，品牌和版本号留在原位。 */
+.platform-rail__items {
+  display: flex; flex-direction: column; gap: 6px; width: 100%; margin-top: 26px;
+  flex: 1 1 auto; min-height: 0;
+  overflow-y: auto; overscroll-behavior: contain;
+  scrollbar-width: none;
+}
+.platform-rail__items::-webkit-scrollbar { width: 0; height: 0; }
+/* 底部常驻一道 18px 的渐隐。装得下时它下面没有内容，看不出来；
+   装不下时最后一项会淡进去，一眼就知道还能往下滚。
+   不用 JS 判断是否溢出：那需要 ResizeObserver 或 rAF，两者在页面
+   不渲染时都不回调，做出来的提示时灵时不灵。纯 CSS 没有这个问题。 */
+.platform-rail__items {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 18px), transparent 100%);
+}
+
 .platform-nav {
   position: relative;
-  width: 100%; min-height: 58px; border-radius: 14px;
+  /* 14 个模块 × 58px 加间距要 916px，1080p 的浏览器可用高度也装不下。
+     按可用高度反推：1080p 约 810px 预算 → 48px 一格刚好，再矮的屏幕
+     由下面的媒体查询逐级收紧，实在放不下才滚。 */
+  width: 100%; min-height: 48px; border-radius: 14px;
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
   color: var(--text-3); font-size: 10px;
   transition: color .2s, background .2s, transform .2s;
@@ -138,6 +159,11 @@ h1, h2, h3 { margin: 0; font-weight: 600; }
 .platform-nav.is-active::before { content: ''; position: absolute; left: -10px; top: 15px; bottom: 15px; width: 2px; background: var(--gold-core); box-shadow: 0 0 10px var(--gold-core); }
 .platform-nav__icon { font-family: var(--ff-serif-cn); font-size: 17px; line-height: 1; }
 .platform-rail__version { margin-top: auto; writing-mode: vertical-rl; font-family: var(--ff-mono); font-size: 8px; letter-spacing: .24em; color: var(--text-4); }
+
+/* 固定在右上角的搜索按钮会盖住阶段标签（账本的「月度日历」「数据中心」
+   一直被压在底下点不到）。用一个变量同时管住按钮的位置和为它预留的空间，
+   免得以后改了按钮却忘了改预留，重叠又悄悄回来。 */
+:root { --search-trigger-reserve: 150px; }
 
 .global-search-trigger {
   position: fixed; z-index: 35; top: 17px; right: 22px; height: 36px; padding: 0 11px;
@@ -1326,6 +1352,12 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
 }
 .stage__chrome.is-wide-tabs { grid-template-columns: minmax(150px, 1fr) auto; grid-template-areas: "title tabs"; }
 .stage__chrome.is-wide-tabs .view-tabs { justify-self: end; }
+/* 右上角那块留给固定搜索按钮，标签栏不许伸进去 */
+.stage__chrome { padding-right: var(--search-trigger-reserve); }
+@media (max-width: 900px) {
+  /* 窄屏上按钮会缩成只剩图标，预留也跟着收 */
+  :root { --search-trigger-reserve: 64px; }
+}
 .stage__title {
   grid-area: title;
   display: flex; align-items: baseline; gap: 10px;
@@ -2602,6 +2634,13 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
   .platform-nav__icon { font-size: 14px; }
   .platform-nav.is-active::before { top: 9px; bottom: 9px; }
   .platform-rail__version { display: none; }
+}
+
+/* 再矮一档：14 个模块在 660px 可用高度里按 40px 一格要 586px，装不下。
+   压到 34px 刚好放得进去；比这更矮就交给左栏自己滚（有渐隐和角标提示）。 */
+@media (max-height: 680px) and (min-width: 761px) {
+  .platform-nav { min-height: 34px; }
+  .platform-nav__icon { font-size: 13px; }
 }
 
 @media (max-width: 760px) {
