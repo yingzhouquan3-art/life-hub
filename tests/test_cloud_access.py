@@ -1,6 +1,7 @@
 """可选云端模式：公网入口必须先经过单用户登录。"""
 import os
 import json
+import socket
 import threading
 import time
 import unittest
@@ -64,14 +65,24 @@ class CloudAccessHttpTests(unittest.TestCase):
             clear=False,
         )
         cls.env.start()
-        cls.config = uvicorn.Config(main.app, host="127.0.0.1", port=8793, log_level="error")
+        # 端口写死会撞上本机正在跑的实例，请求就打到别人身上了：
+        # 那会让这组守门禁的测试给出假结果。改成让系统分配一个空闲端口，
+        # 并断言服务真的起来了，起不来就直接失败，不要沉默地测别人。
+        cls.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        cls.sock.bind(("127.0.0.1", 0))
+        cls.sock.listen(64)
+        cls.port = cls.sock.getsockname()[1]
+        cls.config = uvicorn.Config(main.app, log_level="error")
         cls.server = uvicorn.Server(cls.config)
-        cls.thread = threading.Thread(target=cls.server.run, daemon=True)
+        cls.thread = threading.Thread(
+            target=lambda: cls.server.run(sockets=[cls.sock]), daemon=True)
         cls.thread.start()
         for _ in range(100):
             if cls.server.started:
                 break
             time.sleep(0.05)
+        if not cls.server.started:
+            raise RuntimeError("测试用的服务没起来，后面的断言不能算数")
 
     @classmethod
     def tearDownClass(cls):
@@ -96,7 +107,7 @@ class CloudAccessHttpTests(unittest.TestCase):
         if cookie:
             headers["Cookie"] = cookie
         request = urllib.request.Request(
-            f"http://127.0.0.1:8793{path}", data=data, headers=headers,
+            f"http://127.0.0.1:{self.port}{path}", data=data, headers=headers,
             method="POST" if payload is not None else "GET",
         )
         opener = urllib.request.build_opener() if follow else urllib.request.build_opener(_NoRedirect())

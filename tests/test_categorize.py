@@ -11,6 +11,7 @@ from fastapi import HTTPException
 
 from backend import main
 from backend.api import capture as capture_api
+from backend.api import categorize as categorize_api
 from backend.core import db as db_core
 from backend.modules import capture, categorize
 
@@ -139,6 +140,65 @@ class ConfirmFlowTests(unittest.TestCase):
         with main.db() as conn:
             self.assertEqual(
                 conn.execute("SELECT COUNT(*) FROM transactions").fetchone()[0], 0)
+
+
+class RuleManagementApiTests(unittest.TestCase):
+    """规则管理界面靠这几个响应工作。
+
+    模块注释里写着「规则可以查看和删除，否则一条学错的规则会一直错下去」，
+    这组测试守的就是那条承诺在接口这一层是真的。
+    """
+
+    def setUp(self):
+        self.original_db_path = db_core.current_path()
+        self.temp_dir = tempfile.TemporaryDirectory()
+        db_core.use_database(Path(self.temp_dir.name) / "ledger.db")
+        main.init_db()
+
+    def tearDown(self):
+        db_core.use_database(self.original_db_path)
+        self.temp_dir.cleanup()
+
+    def test_state_separates_seed_rules_from_learned_ones(self):
+        """界面要能告诉用户「这条是我自己教的」还是「它自带的」。"""
+        state = categorize_api.categorize_state()
+        self.assertEqual(state["summary"]["learned"], 0)
+        self.assertEqual(state["summary"]["seed"], state["summary"]["total"])
+        self.assertTrue(state["summary"]["total"])
+
+    def test_adding_an_existing_keyword_rejudges_instead_of_duplicating(self):
+        """用户改判一条内置规则时，不能变成两条互相打架的规则。"""
+        before = categorize_api.categorize_state()["summary"]["total"]
+        result = categorize_api.add_rule(
+            categorize_api.RuleIn(keyword="星巴克", category="social"))
+        summary = result["categorize"]["summary"]
+        self.assertEqual(summary["total"], before)
+        self.assertEqual(summary["learned"], 1)
+        with main.db() as conn:
+            self.assertEqual(categorize.suggest_category(conn, "星巴克 拿铁")["category"], "social")
+
+    def test_add_and_delete_both_return_the_refreshed_list(self):
+        """界面就地刷新靠的是这两个响应，少一个就得整页重载。"""
+        added = categorize_api.add_rule(
+            categorize_api.RuleIn(keyword="楼下张记", category="food"))
+        self.assertIn("categorize", added)
+        rule_id = added["rule"]["id"]
+
+        removed = categorize_api.remove_rule(rule_id)
+        self.assertEqual(removed["deleted"], rule_id)
+        keywords = [r["keyword"] for r in removed["categorize"]["rules"]]
+        self.assertNotIn("楼下张记", keywords)
+
+    def test_deleting_one_seed_rule_does_not_bring_it_back_on_restart(self):
+        """播种只在规则表全空时发生，删掉一条不该被下次启动悄悄补回来。"""
+        state = categorize_api.categorize_state()
+        target = next(r for r in state["rules"] if r["keyword"] == "星巴克")
+        categorize_api.remove_rule(target["id"])
+
+        main.init_db()  # 相当于重启一次
+
+        keywords = [r["keyword"] for r in categorize_api.categorize_state()["rules"]]
+        self.assertNotIn("星巴克", keywords)
 
 
 if __name__ == "__main__":

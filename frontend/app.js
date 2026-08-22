@@ -153,6 +153,13 @@
     startFocus: (body) => post(`${API}/study/focus`, body),
     finishFocus: (id, body) => post(`${API}/study/focus/${id}/finish`, body),
     subscriptions: () => fetch(`${API}/subscriptions`).then(r => r.json()),
+    categorizeState: () => fetch(`${API}/categorize`).then(r => r.json()),
+    addRule: (body) => post(`${API}/categorize/rules`, body),
+    delRule: async (id) => {
+      const response = await fetch(`${API}/categorize/rules/${id}`, { method: 'DELETE' });
+      if (!response.ok) throw new Error(`${response.status} ${await response.text()}`);
+      return response.json();
+    },
     snapshotState: () => fetch(`${API}/backup/snapshots`).then(r => r.json()),
     takeSnapshot: () => post(`${API}/backup/snapshots`, {}),
     bodyState: () => fetch(`${API}/body`).then(r => r.json()),
@@ -267,6 +274,8 @@
     focus: { running: null, today: {}, recent: [] },
     snapshots: null,
     subscriptions: null,
+    categorize: null,
+    ruleFilter: '',
     training: { exercises: [], recent_sessions: [], week: {}, records: [] },
     inbox: { items: [], summary: {}, targets: {} },
     insights: null,
@@ -543,6 +552,13 @@
     btnFocusFinish: $('#btn-focus-finish'),
     btnFocusDrop: $('#btn-focus-drop'),
     subscriptionTotal: $('#subscription-total'),
+    rulesCount: $('#rules-count'),
+    rulesList: $('#rules-list'),
+    ruleKeyword: $('#rule-keyword'),
+    ruleCategory: $('#rule-category'),
+    ruleFilter: $('#rule-filter'),
+    ruleError: $('#rule-error'),
+    btnAddRule: $('#btn-add-rule'),
     subscriptionList: $('#subscription-list'),
     backupStatusBox: $('#backup-status'),
     backupList: $('#backup-list'),
@@ -1732,6 +1748,96 @@
     }).join('') : '<div class="today-empty">还没有固定支出。在下面的「固定支出」里添加。</div>';
   }
 
+  // ---------- 分类规则 ----------
+  // 规则表可能有几十条，全铺出来找不到东西，所以带一个筛选框。
+  function renderRules() {
+    const data = state.categorize;
+    if (!data) {
+      els.rulesCount.textContent = '';
+      els.rulesList.innerHTML = '<div class="today-empty">读不到分类规则。</div>';
+      return;
+    }
+    const summary = data.summary || {};
+    els.rulesCount.textContent =
+      `${fmtInt(summary.total)} 条 · 学来的 ${fmtInt(summary.learned)} · 内置 ${fmtInt(summary.seed)}`;
+
+    const filter = (state.ruleFilter || '').trim().toLowerCase();
+    const rules = (data.rules || []).filter(rule => !filter
+      || rule.keyword.toLowerCase().includes(filter)
+      || (CATEGORY_LABELS[rule.category] || '').includes(filter));
+
+    if (!rules.length) {
+      els.rulesList.innerHTML = filter
+        ? `<div class="today-empty">没有匹配「${escapeHtml(filter)}」的规则。</div>`
+        : '<div class="today-empty">还没有任何规则。</div>';
+      return;
+    }
+
+    els.rulesList.innerHTML = rules.map(rule => `<div class="rule-row">
+      <div class="rule-row__main">
+        <strong>${escapeHtml(rule.keyword)}</strong>
+        <span class="rule-row__cat">${escapeHtml(CATEGORY_LABELS[rule.category] || rule.category)}</span>
+      </div>
+      <div class="rule-row__meta">
+        <span class="rule-tag rule-tag--${rule.source}">${rule.source === 'seed' ? '内置' : '学来的'}</span>
+        <small>${rule.hits ? `命中 ${fmtInt(rule.hits)} 次` : '还没命中过'}</small>
+        <button data-rule-delete="${rule.id}" title="删除这条规则">删除</button>
+      </div>
+    </div>`).join('');
+
+    els.rulesList.querySelectorAll('[data-rule-delete]').forEach(button => {
+      button.addEventListener('click', () => onDeleteRule(Number(button.dataset.ruleDelete)));
+    });
+  }
+
+  async function onAddRule() {
+    if (state.busy) return;
+    const keyword = els.ruleKeyword.value.trim();
+    els.ruleError.hidden = true;
+    if (!keyword) {
+      els.ruleError.textContent = '先填一个关键字';
+      els.ruleError.hidden = false;
+      return;
+    }
+    // 关键字已存在时后端会改判而不是新建，这里据此说清楚发生了什么。
+    const existing = (state.categorize?.rules || []).find(rule => rule.keyword === keyword);
+    state.busy = true;
+    try {
+      const response = await api.addRule({ keyword, category: els.ruleCategory.value });
+      state.categorize = response.categorize;
+      els.ruleKeyword.value = '';
+      renderRules();
+      els.ruleError.textContent = existing
+        ? `已把「${keyword}」改判为${CATEGORY_LABELS[els.ruleCategory.value]}`
+        : `已添加「${keyword}」`;
+      els.ruleError.hidden = false;
+    } catch (error) {
+      els.ruleError.textContent = cleanError(error, '添加规则失败');
+      els.ruleError.hidden = false;
+    } finally {
+      state.busy = false;
+    }
+  }
+
+  async function onDeleteRule(id) {
+    if (state.busy) return;
+    const rule = (state.categorize?.rules || []).find(item => item.id === id);
+    if (!rule) return;
+    if (!window.confirm(`删除规则「${rule.keyword} → ${CATEGORY_LABELS[rule.category] || rule.category}」？已经记好的账不受影响。`)) return;
+    state.busy = true;
+    try {
+      const response = await api.delRule(id);
+      state.categorize = response.categorize;
+      els.ruleError.hidden = true;
+      renderRules();
+    } catch (error) {
+      els.ruleError.textContent = cleanError(error, '删除规则失败');
+      els.ruleError.hidden = false;
+    } finally {
+      state.busy = false;
+    }
+  }
+
   function renderToday() {
     const today = state.today || {};
     const monthStatusLabels = { unset: '尚未设置月预算', safe: '预算节奏正常', warning: '预算已接近上限', over: '本月已经超出预算' };
@@ -2764,6 +2870,7 @@
     renderFocus();
     renderSnapshots();
     renderSubscriptions();
+    renderRules();
     renderTraining();
     renderInbox();
     renderInsights();
@@ -2818,13 +2925,15 @@
     state.lifeCalendar = lifeCalendar || { month: '', selected_date: '', days: [], summary: {}, selected: {} };
     state.goals = data.goals || { goals: [], summary: {} };
     state.capture = data.capture || { pending: [], summary: {}, channel_labels: {} };
-    const [bodyState, trainingState, inboxState, focusState, subscriptions] = await Promise.all([
-      api.bodyState(), api.trainingState(), api.inboxState(), api.focusState(),
-      api.subscriptions(),
-    ]);
+    const [bodyState, trainingState, inboxState, focusState, subscriptions, categorize] =
+      await Promise.all([
+        api.bodyState(), api.trainingState(), api.inboxState(), api.focusState(),
+        api.subscriptions(), api.categorizeState(),
+      ]);
     state.body = bodyState;
     state.focus = focusState;
     state.subscriptions = subscriptions;
+    state.categorize = categorize;
     refreshSnapshots();
     state.training = trainingState;
     state.inbox = inboxState;
@@ -4071,6 +4180,14 @@
   function syncRestoreButton() {
     els.btnRestoreBackup.disabled = !state.restoreSnapshot || els.restoreConfirm.value.trim() !== '恢复';
   }
+  els.btnAddRule.addEventListener('click', onAddRule);
+  els.ruleKeyword.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') onAddRule();
+  });
+  els.ruleFilter.addEventListener('input', () => {
+    state.ruleFilter = els.ruleFilter.value;
+    renderRules();
+  });
   els.restoreConfirm.addEventListener('input', syncRestoreButton);
   els.restoreFile.addEventListener('change', async () => {
     state.restoreSnapshot = null;

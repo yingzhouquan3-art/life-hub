@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=20260821-subscriptions-1">
+  <link rel="stylesheet" href="./style.css?v=20260821-rules-1">
 </head>
 <body>
 
@@ -754,6 +754,35 @@
             <div class="search-summary" id="search-summary">尚未执行搜索。</div>
             <div class="search-results" id="search-results"></div>
           </section>
+
+          <section class="dashboard-panel rules-panel">
+            <header>
+              <div>
+                <h2>分类规则</h2>
+                <p>确认捕获时用来预选分类；预选错了，就在这里改</p>
+              </div>
+              <span class="rules-count" id="rules-count"></span>
+            </header>
+            <div class="rules-add">
+              <input id="rule-keyword" type="text" maxlength="40" placeholder="关键字，例如 星巴克">
+              <select id="rule-category" aria-label="规则对应的分类">
+                <option value="food">餐饮</option><option value="transport">交通</option>
+                <option value="study">学习</option><option value="housing">住宿</option>
+                <option value="medical">医疗</option><option value="entertainment">娱乐</option>
+                <option value="social">社交</option><option value="digital">数字服务</option>
+                <option value="other">其他</option>
+              </select>
+              <button id="btn-add-rule">添加规则</button>
+              <input id="rule-filter" type="search" placeholder="筛选已有规则">
+            </div>
+            <p class="plan-status" id="rule-error" hidden></p>
+            <div class="rules-list" id="rules-list"></div>
+            <p class="import-note">
+              规则只影响下拉框的默认值，<b>不会自动记账</b>，也不会改动已经记好的账。
+              关键字用的是包含匹配，多条同时命中时取<b>最长</b>的那条——「星巴克」压过「咖啡」。
+              删掉一条内置规则后它不会自己回来；但如果把规则<b>全部</b>删光，下次启动会重新放回那批内置规则。
+            </p>
+          </section>
         </div>
       </div>
       <div class="stage__footer">
@@ -1231,6 +1260,6 @@
   </div>
 
   <script src="./grid.js"></script>
-  <script src="./app.js?v=20260821-subscriptions-1"></script>
+  <script src="./app.js?v=20260821-rules-1"></script>
 </body>
 </html>

@@ -3,6 +3,7 @@
 桌面一直是回环地址，没有门禁需求。手机连进来之后就不同了：
 监听地址一旦不是回环，任何能到达这台机器的设备都能读到全部生活数据。
 """
+import socket
 import tempfile
 import threading
 import time
@@ -164,14 +165,24 @@ class LiveServerTests(unittest.TestCase):
 
         from backend import main
 
-        cls.config = uvicorn.Config(main.app, host="127.0.0.1", port=8791, log_level="error")
+        # 端口写死会撞上本机正在跑的实例，请求就打到别人身上了：
+        # 那会让这组守门禁的测试给出假结果。改成让系统分配一个空闲端口，
+        # 并断言服务真的起来了，起不来就直接失败，不要沉默地测别人。
+        cls.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        cls.sock.bind(("127.0.0.1", 0))
+        cls.sock.listen(64)
+        cls.port = cls.sock.getsockname()[1]
+        cls.config = uvicorn.Config(main.app, log_level="error")
         cls.server = uvicorn.Server(cls.config)
-        cls.thread = threading.Thread(target=cls.server.run, daemon=True)
+        cls.thread = threading.Thread(
+            target=lambda: cls.server.run(sockets=[cls.sock]), daemon=True)
         cls.thread.start()
         for _ in range(80):
             if cls.server.started:
                 break
             time.sleep(0.05)
+        if not cls.server.started:
+            raise RuntimeError("测试用的服务没起来，后面的断言不能算数")
 
     @classmethod
     def tearDownClass(cls):
@@ -179,7 +190,7 @@ class LiveServerTests(unittest.TestCase):
         cls.thread.join(timeout=5)
 
     def get(self, path):
-        with urllib.request.urlopen(f"http://127.0.0.1:8791{path}", timeout=10) as response:
+        with urllib.request.urlopen(f"http://127.0.0.1:{self.port}{path}", timeout=10) as response:
             return response.status, response.read()
 
     def test_local_api_still_works_without_a_token(self):

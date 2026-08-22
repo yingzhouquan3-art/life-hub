@@ -211,12 +211,16 @@ class FrontendWiringTests(unittest.TestCase):
         self.assertTrue(wanted, "没解析到任何 els 引用，说明这条守卫失效了")
         self.assertEqual(sorted(wanted - ids), [], "app.js 引用了 index.html 里不存在的 id")
 
-    def test_subscription_panel_is_actually_rendered(self):
+    def test_panels_with_a_backend_are_actually_rendered(self):
+        """有接口没入口是这个项目的老毛病，补一条就在这里记一条。"""
         root = Path(__file__).resolve().parents[1] / "frontend"
         html = (root / "index.html").read_text(encoding="utf-8")
         js = (root / "app.js").read_text(encoding="utf-8")
-        self.assertIn('id="subscription-list"', html)
-        self.assertIn("renderSubscriptions();", js)
+        for container, render in (("subscription-list", "renderSubscriptions();"),
+                                  ("rules-list", "renderRules();")):
+            with self.subTest(container=container):
+                self.assertIn(f'id="{container}"', html)
+                self.assertIn(render, js)
 
 
 if __name__ == "__main__":
