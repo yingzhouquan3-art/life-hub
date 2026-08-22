@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=20260821-timeline-1">
+  <link rel="stylesheet" href="./style.css?v=20260821-subscriptions-1">
 </head>
 <body>
 
@@ -532,6 +532,20 @@
           <article class="planning-kpi">
             <span>预测日花销</span><strong id="plan-daily-rate">¥0</strong><small id="plan-spending-basis">尚无支出样本</small>
           </article>
+        </section>
+        <section class="dashboard-panel subscription-panel">
+          <header>
+            <div>
+              <h2>订阅总览</h2>
+              <p>我到底订了多少东西，一个月和一年各要花多少</p>
+            </div>
+            <span class="subscription-total" id="subscription-total"></span>
+          </header>
+          <div id="subscription-list"></div>
+          <p class="import-note">
+            月均成本是把季付、年付摊到每个月，方便横向比较——它是换算值，
+            <b>不是某个月真的会扣这么多</b>。条目在下方「固定支出」里添加与删除。
+          </p>
         </section>
 
         <div class="planning-grid">
@@ -1217,6 +1231,6 @@
   </div>
 
   <script src="./grid.js"></script>
-  <script src="./app.js?v=20260821-timeline-1"></script>
+  <script src="./app.js?v=20260821-subscriptions-1"></script>
 </body>
 </html>

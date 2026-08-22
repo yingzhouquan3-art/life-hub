@@ -296,7 +296,11 @@ def delete_recurring_bill(bill_id: int):
         ).fetchone():
             raise HTTPException(404, "bill not found")
         conn.execute("UPDATE recurring_bills SET is_active = 0 WHERE id = ?", (bill_id,))
-        return {"deleted_bill": bill_id, "calendar": get_financial_calendar(conn)}
+        return {
+            "deleted_bill": bill_id,
+            "calendar": get_financial_calendar(conn),
+            "subscriptions": get_subscription_overview(conn),
+        }
 
 
 @router.post("/api/bills/{bill_id}/pay")

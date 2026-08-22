@@ -152,6 +152,7 @@
     focusState: () => fetch(`${API}/study/focus`).then(r => r.json()),
     startFocus: (body) => post(`${API}/study/focus`, body),
     finishFocus: (id, body) => post(`${API}/study/focus/${id}/finish`, body),
+    subscriptions: () => fetch(`${API}/subscriptions`).then(r => r.json()),
     snapshotState: () => fetch(`${API}/backup/snapshots`).then(r => r.json()),
     takeSnapshot: () => post(`${API}/backup/snapshots`, {}),
     bodyState: () => fetch(`${API}/body`).then(r => r.json()),
@@ -265,6 +266,7 @@
     body: { latest: null, changes: {}, recent: [], girth_labels: {} },
     focus: { running: null, today: {}, recent: [] },
     snapshots: null,
+    subscriptions: null,
     training: { exercises: [], recent_sessions: [], week: {}, records: [] },
     inbox: { items: [], summary: {}, targets: {} },
     insights: null,
@@ -540,6 +542,8 @@
     btnBreakLong: $('#btn-break-long'),
     btnFocusFinish: $('#btn-focus-finish'),
     btnFocusDrop: $('#btn-focus-drop'),
+    subscriptionTotal: $('#subscription-total'),
+    subscriptionList: $('#subscription-list'),
     backupStatusBox: $('#backup-status'),
     backupList: $('#backup-list'),
     backupNote: $('#backup-note'),
@@ -1695,6 +1699,39 @@
     renderSnapshots();
   }
 
+  // ---------- 订阅总览 ----------
+  // 数据本来就随 /api/planning 一起回来，之前只是没人渲染。
+  function renderSubscriptions() {
+    const data = state.subscriptions;
+    if (!data) {
+      els.subscriptionTotal.textContent = '';
+      els.subscriptionList.innerHTML = '<div class="today-empty">还没有固定支出。</div>';
+      return;
+    }
+    const summary = data.summary || {};
+    els.subscriptionTotal.textContent = summary.count
+      ? `${fmtInt(summary.count)} 项 · 月均 ${fmtCNY(summary.monthly_total)} · 一年 ${fmtCNY(summary.yearly_total)}`
+      : '';
+
+    const items = data.items || [];
+    els.subscriptionList.innerHTML = items.length ? items.map(item => {
+      const due = item.days_until_due == null
+        ? '没有排到下次扣费'
+        : (item.days_until_due === 0 ? '今天扣费' : `${fmtInt(item.days_until_due)} 天后扣费`);
+      const soon = item.days_until_due != null && item.days_until_due <= 7;
+      return `<div class="subscription-row${soon ? ' is-soon' : ''}">
+        <div>
+          <strong>${escapeHtml(item.name)}</strong>
+          <small>${escapeHtml(item.cycle_label)} · ${escapeHtml(due)} · ${escapeHtml(item.account_name || '')}</small>
+        </div>
+        <div class="subscription-row__cost">
+          <em>${fmtCNY(item.amount)}</em>
+          <small>月均 ${fmtCNY(item.monthly_cost)}</small>
+        </div>
+      </div>`;
+    }).join('') : '<div class="today-empty">还没有固定支出。在下面的「固定支出」里添加。</div>';
+  }
+
   function renderToday() {
     const today = state.today || {};
     const monthStatusLabels = { unset: '尚未设置月预算', safe: '预算节奏正常', warning: '预算已接近上限', over: '本月已经超出预算' };
@@ -2726,6 +2763,7 @@
     renderBody();
     renderFocus();
     renderSnapshots();
+    renderSubscriptions();
     renderTraining();
     renderInbox();
     renderInsights();
@@ -2780,11 +2818,13 @@
     state.lifeCalendar = lifeCalendar || { month: '', selected_date: '', days: [], summary: {}, selected: {} };
     state.goals = data.goals || { goals: [], summary: {} };
     state.capture = data.capture || { pending: [], summary: {}, channel_labels: {} };
-    const [bodyState, trainingState, inboxState, focusState] = await Promise.all([
+    const [bodyState, trainingState, inboxState, focusState, subscriptions] = await Promise.all([
       api.bodyState(), api.trainingState(), api.inboxState(), api.focusState(),
+      api.subscriptions(),
     ]);
     state.body = bodyState;
     state.focus = focusState;
+    state.subscriptions = subscriptions;
     refreshSnapshots();
     state.training = trainingState;
     state.inbox = inboxState;
@@ -3870,6 +3910,8 @@
         note: els.billNote.value.trim(),
       });
       state.calendar = response.calendar;
+      state.subscriptions = response.subscriptions;
+      renderSubscriptions();
       els.billName.value = '';
       els.billAmount.value = '';
       els.billNote.value = '';
@@ -3929,6 +3971,8 @@
     try {
       const response = await api.delBill(id);
       state.calendar = response.calendar;
+      state.subscriptions = response.subscriptions;
+      renderSubscriptions();
       renderMonthlyReview();
       renderStats();
     } catch (error) {

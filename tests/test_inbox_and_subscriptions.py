@@ -3,6 +3,7 @@
 收集箱守的是「归档只是标记去向，不复制内容」；
 订阅守的是「季付年付不会月月提醒一笔并不会扣的钱」。
 """
+import re
 import tempfile
 import unittest
 from datetime import date
@@ -184,6 +185,38 @@ class SubscriptionTests(unittest.TestCase):
             overview = ledger.get_subscription_overview(conn)
         self.assertEqual(overview["summary"]["count"], 0)
         self.assertEqual(overview["summary"]["monthly_total"], 0)
+
+    def test_add_and_delete_both_return_the_refreshed_overview(self):
+        """界面靠这两个响应就地刷新订阅卡片，少一个就得整页重载才看得到变化。"""
+        added = self.add_bill("云盘", 19.0)
+        self.assertEqual(added["subscriptions"]["summary"]["count"], 1)
+
+        removed = ledger_api.delete_recurring_bill(added["bill_id"])
+        self.assertIn("subscriptions", removed)
+        self.assertEqual(removed["subscriptions"]["summary"]["count"], 0)
+
+
+class FrontendWiringTests(unittest.TestCase):
+    """做完后端却没有入口，是这个项目反复犯的错。
+
+    这里只守一条最容易犯的：app.js 拿的每个 id，index.html 里都得真的有。
+    """
+
+    def test_every_element_lookup_has_a_matching_id(self):
+        root = Path(__file__).resolve().parents[1] / "frontend"
+        js = (root / "app.js").read_text(encoding="utf-8")
+        html = (root / "index.html").read_text(encoding="utf-8")
+        ids = set(re.findall(r'id="([^"]+)"', html))
+        wanted = set(re.findall(r"\$\('#([A-Za-z0-9_-]+)'\)", js))
+        self.assertTrue(wanted, "没解析到任何 els 引用，说明这条守卫失效了")
+        self.assertEqual(sorted(wanted - ids), [], "app.js 引用了 index.html 里不存在的 id")
+
+    def test_subscription_panel_is_actually_rendered(self):
+        root = Path(__file__).resolve().parents[1] / "frontend"
+        html = (root / "index.html").read_text(encoding="utf-8")
+        js = (root / "app.js").read_text(encoding="utf-8")
+        self.assertIn('id="subscription-list"', html)
+        self.assertIn("renderSubscriptions();", js)
 
 
 if __name__ == "__main__":
