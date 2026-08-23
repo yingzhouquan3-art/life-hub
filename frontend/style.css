@@ -2308,6 +2308,17 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
   color: var(--text-2); background: var(--bg-input); font-size: 10px;
 }
 .ingest-more { padding: 5px 8px; color: var(--text-4); font-size: 10px; }
+.ingest-leftovers h4 {
+  margin: 12px 0 6px; color: var(--text-3); font-size: 10.5px; font-weight: 600;
+}
+.ingest-leftover {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 4px 8px; color: var(--text-4); font-size: 10px;
+}
+.ingest-leftover__why { flex: 1; min-width: 0; color: var(--text-3); }
+.ingest-leftover em { font-style: normal; white-space: nowrap; }
+.ingest-leftover--review { color: var(--gold-bloom); }
+.ingest-leftover--review .ingest-leftover__why { color: var(--gold-bloom); }
 .ingest-actions { display: flex; gap: 7px; margin-top: 9px; }
 .ingest-actions button {
   height: 30px; padding: 0 14px; border-radius: 6px; font-size: 10.5px;

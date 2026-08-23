@@ -144,6 +144,17 @@ class IngestFlowTests(unittest.TestCase):
                 self.assertEqual(result["module"], module)
                 self.assertEqual(result["imported"], preview["summary"]["will_write"])
 
+    def test_rows_that_are_not_written_are_still_accounted_for(self):
+        """既不写入也不跳过的行不能凭空消失。
+
+        「账目对不上却不知道少了哪几笔」是对账最难受的状态，而且它会让人
+        怀疑整个导入功能。所以预览必须把 review 和 skipped 都带出来。
+        """
+        text = WECHAT + "2026-08-04 10:00:00,零钱提现,/,/,/,¥50.00,零钱,提现已到账" + chr(10)
+        preview = self.preview("wechat_statement", text)
+        self.assertTrue(preview["review"], "零钱提现该进「需要你判断」")
+        self.assertIn("虚增", preview["review"][0]["reason"])
+
     def test_unknown_kind_is_rejected(self):
         from backend.ingest import build_ingest_preview
         with main.db() as conn:

@@ -123,16 +123,35 @@ class RealWorldQuirkTests(unittest.TestCase):
         self.assertEqual(row["counterparty"], "")
 
     def test_wechat_empty_direction_is_resolved_from_type(self):
-        """微信的信用卡还款、零钱提现这些行，「收/支」列就是一个斜杠。"""
+        """微信「零钱充值」这类行，「收/支」列就是一个斜杠，方向从交易类型推。"""
+        text = self.wechat("2026-07-05 10:00:00,零钱充值,/,/,/,¥300.00,银行卡,充值成功")
+        result = parse_statement(text)
+        self.assertEqual(result["summary"]["parsed"], 1)
+        row = result["rows"][0]
+        self.assertEqual(row["type"], "income")
+        self.assertIn("按交易类型", row["note_hint"], "替用户判断的方向必须说出来")
+
+    def test_moving_your_own_money_is_not_counted_as_spending(self):
+        """零钱提现和信用卡还款**不是消费**，自动记成支出会让数字变假：
+
+        - 零钱提现是零钱转到银行卡，钱一分没少，记成支出会虚增总花销和预算消耗；
+        - 信用卡还款还的是刷卡时已经记过的钱，再记一笔就重复计了两次。
+
+        china_bean_importers 把它们记成账户之间的转账——那是复式记账，
+        一笔能同时写两个账户。这个平台一笔交易只挂一个账户，表达不了，
+        所以不猜：放进「需要你判断」，并说清楚为什么。
+        """
         text = self.wechat(
             "2026-07-03 08:15:00,信用卡还款,/,/,/,¥500.00,零钱,还款成功",
             "2026-07-04 09:00:00,零钱提现,/,/,/,¥200.00,零钱,提现已到账",
         )
         result = parse_statement(text)
-        self.assertEqual(result["summary"]["parsed"], 2)
-        for row in result["rows"]:
-            self.assertEqual(row["type"], "expense")
-            self.assertIn("按交易类型", row["note_hint"], "替用户判断的方向必须说出来")
+        self.assertEqual(result["summary"]["parsed"], 0, "这两行不该自动写进账本")
+        self.assertEqual(len(result["review"]), 2)
+        reasons = " ".join(item["reason"] for item in result["review"])
+        self.assertIn("虚增", reasons)
+        self.assertIn("重复计", reasons)
+        self.assertIn("转账", reasons, "要告诉用户想记的话该走哪条路")
 
     def test_wechat_partial_refund_is_kept(self):
         """「已退款(¥5.00)」是部分退款，那笔钱确实花掉了一部分。

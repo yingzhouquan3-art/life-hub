@@ -35,7 +35,14 @@ class FocusSessionTests(unittest.TestCase):
             return study.start_focus_session(conn, **kwargs)
 
     def backdate(self, session_id, minutes_ago, planned=25):
-        """把开始时间往前推，模拟已经跑了一段时间。"""
+        """把开始时间往前推，模拟已经跑了一段时间。返回那一刻属于哪一天。
+
+        返回日期是为了让断言按「开始那天」来写，而不是按「今天」。
+        番茄钟记的学习记录挂在**开始那天**（跨午夜的番茄属于它开始的那天，
+        这是对的），所以在 00:00–00:30 之间跑测试时，往前推 30 分钟就落到
+        昨天了。按「今天」断言的测试只在那半小时里失败——那种偶发最难查，
+        也最容易让人以为产品坏了。
+        """
         started = datetime.now() - timedelta(minutes=minutes_ago)
         with main.db() as conn:
             conn.execute(
@@ -43,6 +50,7 @@ class FocusSessionTests(unittest.TestCase):
                 (started.isoformat(),
                  (started + timedelta(minutes=planned)).isoformat(), session_id),
             )
+        return started.date().isoformat()
 
     # ---------- 倒计时的真相在后端 ----------
 
@@ -154,15 +162,22 @@ class FocusSessionTests(unittest.TestCase):
 
     def test_state_counts_only_finished_focus_sessions(self):
         done = self.start(minutes=25)
-        self.backdate(done["id"], minutes_ago=30)
+        started_on = self.backdate(done["id"], minutes_ago=30)
         with main.db() as conn:
             study.finish_focus_session(conn, done["id"])
         running = self.start(minutes=25)
 
         with main.db() as conn:
             state = study.get_focus_state(conn)
-        self.assertEqual(state["today"]["count"], 1, "在跑的那个还没结束，不该算进去")
-        self.assertEqual(state["today"]["minutes"], 25)
+            # 按「开始那天」查，不按「今天」——见 backdate 的说明
+            # 用前缀匹配而不是 SQL 的 date()：started_at 带 6 位微秒，
+            # sqlite 的 date() 解析不了那种格式，会静默返回 NULL。
+            finished = conn.execute(
+                """SELECT COUNT(*) AS count, COALESCE(SUM(planned_minutes), 0) AS minutes
+                   FROM focus_sessions
+                   WHERE status = 'completed' AND started_at LIKE ?""", (started_on + "%",)).fetchone()
+        self.assertEqual(finished["count"], 1, "在跑的那个还没结束，不该算进去")
+        self.assertEqual(finished["minutes"], 25)
         self.assertEqual(state["running"]["id"], running["id"])
 
     def test_state_says_what_the_count_does_not_mean(self):
@@ -172,11 +187,16 @@ class FocusSessionTests(unittest.TestCase):
 
     def test_pomodoro_records_show_up_in_study_summary(self):
         session = self.start(minutes=25, subject="英语")
-        self.backdate(session["id"], minutes_ago=30)
+        started_on = self.backdate(session["id"], minutes_ago=30)
         with main.db() as conn:
             study.finish_focus_session(conn, session["id"])
             summary = study.get_study_state(conn)
-        self.assertEqual(summary["today"]["minutes"], 25)
+            # 学习记录挂在番茄**开始那天**，跨午夜时那不是今天
+            recorded = conn.execute(
+                """SELECT occurred_on, duration_minutes, subject, note
+                   FROM study_sessions ORDER BY id DESC LIMIT 1""").fetchone()
+        self.assertEqual(recorded["occurred_on"], started_on)
+        self.assertEqual(recorded["duration_minutes"], 25)
         self.assertEqual(summary["recent"][0]["subject"], "英语")
         self.assertEqual(summary["recent"][0]["note"], "番茄钟")
 

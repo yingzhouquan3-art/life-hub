@@ -590,6 +590,7 @@
     ingestVerdict: $('#ingest-verdict'),
     ingestSummary: $('#ingest-summary'),
     ingestRows: $('#ingest-rows'),
+    ingestLeftovers: $('#ingest-leftovers'),
     ingestActions: $('#ingest-actions'),
     ingestError: $('#ingest-error'),
     btnIngestPreview: $('#btn-ingest-preview'),
@@ -1976,6 +1977,7 @@
       els.ingestSummary.hidden = true;
       els.ingestActions.hidden = true;
       els.ingestRows.innerHTML = '';
+      els.ingestLeftovers.innerHTML = '';
       return;
     }
     const s = preview.summary;
@@ -1984,7 +1986,12 @@
       `<b>将写入 ${fmtInt(s.will_write)} 行</b>`,
       `已经记过 ${fmtInt(s.already_have)} 行`,
     ];
-    if (s.skipped) bits.push(`认不出而跳过 ${fmtInt(s.skipped)} 行`);
+    // 跳过的原因多半是「退款」「交易关闭」这类**没真的发生**，不是「认不出」。
+    // 写成认不出会让人以为解析器不行，其实是它做对了事。
+    if (s.skipped) bits.push(`跳过 ${fmtInt(s.skipped)} 行`);
+    // 需要判断的那些既不写入也不跳过，摘要里不提的话它们等于凭空消失了
+    const reviewCount = (preview.review || []).length;
+    if (reviewCount) bits.push(`<b>需要你判断 ${fmtInt(reviewCount)} 行</b>`);
     // 没有要写的行时不报金额：那个 ¥0 说的是「新增合计」，很容易被读成「这个月花了 0 元」。
     if (s.amount != null && s.will_write) bits.push(`将写入合计 ${fmtCNY(s.amount)}`);
     if (s.date_from) bits.push(`${s.date_from} 至 ${s.date_to}`);
@@ -1998,6 +2005,7 @@
     if (!rows.length) {
       els.ingestRows.innerHTML = `<div class="today-empty">${
         s.already_have ? '这个文件里的记录都已经在库里了，没有要写的。' : '没有可写入的行。'}</div>`;
+      renderIngestLeftovers(preview);
       return;
     }
 
@@ -2026,6 +2034,37 @@
         rows[Number(select.dataset.ingestCategory)].category = select.value;
       });
     });
+
+    renderIngestLeftovers(preview);
+  }
+
+  /** 没写进去的那些行，逐条列出来。
+   *
+   *  只在摘要里给一个「跳过 2 行」的数字，等于让用户自己去账单里找是哪两行。
+   *  账目对不上却不知道少了哪几笔——这是对账最难受的状态，而且它会让人
+   *  怀疑整个导入功能。老的账单面板一直是逐条列的，我做统一入口时漏了。
+   */
+  function renderIngestLeftovers(preview) {
+    const review = preview.review || [];
+    const skipped = preview.skipped || [];
+    if (!review.length && !skipped.length) { els.ingestLeftovers.innerHTML = ''; return; }
+    const parts = [];
+    if (review.length) {
+      parts.push(`<h4>需要你判断 · ${fmtInt(review.length)} 行（不会自动写入）</h4>` +
+        review.map(row => `<div class="ingest-leftover ingest-leftover--review">
+          <span>${escapeHtml(row.occurred_on || '')}</span>
+          <span class="ingest-leftover__why">${escapeHtml(row.note || '')} — ${escapeHtml(row.reason || '')}</span>
+          <em>${row.amount == null ? '' : fmtCNY(row.amount)}</em>
+        </div>`).join(''));
+    }
+    if (skipped.length) {
+      parts.push(`<h4>已跳过 · ${fmtInt(skipped.length)} 行</h4>` +
+        skipped.map(item => `<div class="ingest-leftover">
+          <span>第 ${fmtInt(item.line)} 行</span>
+          <span class="ingest-leftover__why">${escapeHtml(item.reason || '')}</span>
+        </div>`).join(''));
+    }
+    els.ingestLeftovers.innerHTML = parts.join('');
   }
 
   function describeIngestRow(kind, row) {

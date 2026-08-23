@@ -96,9 +96,24 @@ _PLACEHOLDER = "/"
 # 微信有些交易的「收/支」列就是一个斜杠，方向要从交易类型推。
 # 这些映射来自 china_bean_importers 对真实账单的处理。
 _WECHAT_DIRECTION_BY_TYPE = (
-    ("信用卡还款", "expense"),
-    ("零钱提现", "expense"),
     ("零钱充值", "income"),
+)
+
+# 这几类**不是消费**，是钱在你自己的账户之间挪，或者还的是早就花掉的钱。
+# 自动记成支出会让数字变假：
+#
+# - 零钱提现：零钱转到银行卡，钱一分没少，算成支出会虚增总花销和预算消耗；
+# - 信用卡还款：真正的消费发生在刷卡那一刻，把还款也记一笔就重复计了两次。
+#
+# china_bean_importers 把它们记成账户之间的转账——那是复式记账，一笔能同时
+# 写两个账户。这个平台的一笔交易只挂一个账户，表达不了，所以不猜：
+# 放进「需要你判断」，并说清楚为什么。平台本来就有「转账」功能，
+# 想记的话在那边记，那条路明确不会重复计成收支。
+_NOT_SPENDING_TYPES = (
+    ("零钱提现", "这是零钱转到银行卡，钱没有花出去。记成支出会虚增花销——"
+                 "要记的话请用「数据中心 → 转账」"),
+    ("信用卡还款", "还的是刷卡时已经记过的钱。再记一笔支出就重复计了两次——"
+                   "要记的话请用「数据中心 → 转账」"),
 )
 
 # 支付宝除了收入/支出，还有「不计收支」和「其他」：
@@ -133,6 +148,11 @@ def _resolve_direction(row: dict, source: str) -> tuple[str, str]:
         return "income", ""
 
     kind = _pick(row, ("交易类型", "交易分类"))
+    # 先拦下「不是消费」的那几类，再谈方向。
+    # 它们的方向其实是清楚的，问题在于根本不该算作花销。
+    for keyword, why in _NOT_SPENDING_TYPES:
+        if keyword in kind:
+            return "unclear", why
     if source == "wechat":
         for keyword, direction in _WECHAT_DIRECTION_BY_TYPE:
             if keyword in kind:

@@ -288,6 +288,26 @@ class FrontendWiringTests(unittest.TestCase):
         start = css.index(".capture-item__merchant")
         self.assertIn("flex:", css[start:start + 300])
 
+    def test_the_importer_lists_what_it_did_not_write(self):
+        """只在摘要里给一个「跳过 2 行」的数字，等于让用户自己回账单里找是哪两行。
+        老的账单面板一直是逐条列的，我做统一入口时漏了——这是回归。"""
+        root = Path(__file__).resolve().parents[1] / "frontend"
+        js = (root / "app.js").read_text(encoding="utf-8")
+        html = (root / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="ingest-leftovers"', html)
+        self.assertIn("renderIngestLeftovers", js)
+        start = js.index("function renderIngestLeftovers")
+        body = js[start:start + 1400]
+        self.assertIn("preview.review", body)
+        self.assertIn("preview.skipped", body)
+
+    def test_the_summary_does_not_call_deliberate_skips_unrecognised(self):
+        """跳过的原因多半是「退款」「交易关闭」这类没真的发生，不是认不出。
+        写成认不出会让人以为解析器不行，其实它做对了事。"""
+        root = Path(__file__).resolve().parents[1] / "frontend"
+        js = (root / "app.js").read_text(encoding="utf-8")
+        self.assertNotIn("认不出而跳过", js)
+
     def test_panels_with_a_backend_are_actually_rendered(self):
         """有接口没入口是这个项目的老毛病，补一条就在这里记一条。"""
         root = Path(__file__).resolve().parents[1] / "frontend"
