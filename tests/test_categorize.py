@@ -142,6 +142,91 @@ class ConfirmFlowTests(unittest.TestCase):
                 conn.execute("SELECT COUNT(*) FROM transactions").fetchone()[0], 0)
 
 
+class MerchantAtConfirmTests(unittest.TestCase):
+    """通知原文里认不出商户时，学习链是断的。
+
+    learn_category 只在有关键字时才写规则，而解析规则是按常见文案写的、
+    各家文案还会变。也就是说解析失败的那些商户，用户每次都得重新挑分类，
+    而且平台永远学不会。让用户在确认那一下顺手补两个字就能接上。
+    """
+
+    def setUp(self):
+        self.original_db_path = db_core.current_path()
+        self.temp_dir = tempfile.TemporaryDirectory()
+        db_core.use_database(Path(self.temp_dir.name) / "ledger.db")
+        main.init_db()
+
+    def tearDown(self):
+        db_core.use_database(self.original_db_path)
+        self.temp_dir.cleanup()
+
+    def unparsed_capture(self, amount=42.0):
+        """一条认不出商户的通知——这正是真实文案最常见的情况。"""
+        result = capture_api.capture_notification(capture_api.NotificationIn(
+            channel="wechat_notification", text=f"微信支付 支付成功 ¥{amount:.2f}"))
+        return result["capture"]["id"]
+
+    def learned(self):
+        with main.db() as conn:
+            return conn.execute(
+                "SELECT COUNT(*) FROM merchant_rules WHERE source = 'learned'").fetchone()[0]
+
+    def test_without_a_merchant_nothing_is_ever_learned(self):
+        """先把问题本身钉住：不补商户就学不到东西，这不是我臆想的。"""
+        capture_id = self.unparsed_capture()
+        capture_api.confirm_capture(capture_id, capture_api.CaptureConfirmIn(category="food"))
+        self.assertEqual(self.learned(), 0)
+
+    def test_a_merchant_typed_at_confirm_closes_the_loop(self):
+        capture_id = self.unparsed_capture()
+        result = capture_api.confirm_capture(
+            capture_id, capture_api.CaptureConfirmIn(category="food", merchant="楼下张记"))
+        self.assertEqual(self.learned(), 1)
+        self.assertEqual(result["learned_rule"]["keyword"], "楼下张记")
+
+    def test_the_next_notification_from_that_merchant_is_pre_selected(self):
+        """学到规则的意义就在这一步：下次不用再挑一遍。"""
+        first = self.unparsed_capture()
+        capture_api.confirm_capture(
+            first, capture_api.CaptureConfirmIn(category="food", merchant="楼下张记"))
+
+        capture_api.capture_notification(capture_api.NotificationIn(
+            channel="wechat_notification", text="微信支付 支付成功 ¥18.00 楼下张记"))
+        pending = capture_api.capture_state()["pending"]
+        suggested = [item["suggested"] for item in pending if item["suggested"]]
+        self.assertTrue(suggested)
+        self.assertEqual(suggested[0]["category"], "food")
+        self.assertEqual(suggested[0]["keyword"], "楼下张记")
+
+    def test_the_transaction_note_becomes_the_merchant_not_the_raw_text(self):
+        """备注写成整条通知原文，账本翻起来全是「微信支付 支付成功 ¥42.00」。"""
+        capture_id = self.unparsed_capture()
+        result = capture_api.confirm_capture(
+            capture_id, capture_api.CaptureConfirmIn(category="food", merchant="楼下张记"))
+        self.assertEqual(result["transaction"]["note"], "楼下张记")
+
+    def test_a_typed_merchant_wins_over_a_parsed_one(self):
+        """解析出来的商户可能是「星巴克咖啡(西单店)」这种，用户想改成「星巴克」。"""
+        with main.db() as conn:
+            created = capture.record_capture(
+                conn, channel="wechat_notification", raw_text="向 星巴克咖啡(西单店) 付款",
+                amount=32.0, merchant="星巴克咖啡(西单店)")["capture"]
+        result = capture_api.confirm_capture(
+            created["id"], capture_api.CaptureConfirmIn(category="food", merchant="星巴克"))
+        self.assertEqual(result["learned_rule"]["keyword"], "星巴克")
+        self.assertEqual(result["transaction"]["note"], "星巴克")
+
+    def test_income_captures_still_do_not_learn_expense_rules(self):
+        """收入没有支出分类，补了商户也不该写进分类规则。"""
+        with main.db() as conn:
+            created = capture.record_capture(
+                conn, channel="wechat_notification", raw_text="已收款 200 元",
+                amount=200.0, direction="income")["capture"]
+        capture_api.confirm_capture(
+            created["id"], capture_api.CaptureConfirmIn(source="part_time", merchant="某公司"))
+        self.assertEqual(self.learned(), 0)
+
+
 class RuleManagementApiTests(unittest.TestCase):
     """规则管理界面靠这几个响应工作。
 

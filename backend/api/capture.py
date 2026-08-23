@@ -48,6 +48,13 @@ class CaptureConfirmIn(BaseModel):
     account_id: Optional[int] = None
     occurred_on: Optional[str] = None
     note: Optional[str] = Field(None, max_length=200)
+    # 确认时顺手补上的商户名。
+    #
+    # 通知原文里认不出商户是常事（规则是按常见文案写的，各家文案还会变），
+    # 而**没有商户名就学不到任何东西**：learn_category 只在有关键字时才写规则。
+    # 也就是说解析失败的那些商户，你每次都得重新挑一遍分类。
+    # 让用户在确认那一下顺手打两个字，这条学习链就接上了。
+    merchant: Optional[str] = Field(None, max_length=60)
 
 
 class NotificationIn(BaseModel):
@@ -134,9 +141,9 @@ def confirm_capture(capture_id: int, body: CaptureConfirmIn):
     """把一条捕获转成真正的交易。到这一步之前它不影响任何数字。"""
     with db() as conn:
         capture = get_capture(conn, capture_id)
-        note = body.note if body.note is not None else (
-            capture["merchant"] or capture["raw_text"]
-        )
+        # 用户当场填的优先，其次是解析出来的
+        merchant = (body.merchant or capture["merchant"] or "").strip()
+        note = body.note if body.note is not None else (merchant or capture["raw_text"])
         transaction = create_transaction(
             conn,
             occurred_on=body.occurred_on or capture["occurred_on"],
@@ -153,8 +160,8 @@ def confirm_capture(capture_id: int, body: CaptureConfirmIn):
         # 有商户名就用商户名当关键字；没有就不学——
         # 拿整条通知原文当关键字永远不会再命中，只是噪声。
         learned = None
-        if capture["direction"] == "expense" and body.category and capture["merchant"]:
-            learned = learn_category(conn, capture["merchant"], body.category)
+        if capture["direction"] == "expense" and body.category and merchant:
+            learned = learn_category(conn, merchant, body.category)
 
         return {
             "capture": confirmed,

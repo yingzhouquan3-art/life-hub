@@ -1527,7 +1527,7 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
 .capture-item__main strong { font-size: 15px; color: var(--text-1); }
 .capture-item__main span { color: var(--text-2); font-size: 11px; }
 .capture-item__main small { width: 100%; color: var(--text-4); font-size: 10px; }
-.capture-item__actions { display: flex; gap: 6px; margin-top: 8px; }
+.capture-item__actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .capture-item__actions select { flex: 1; min-width: 0; height: 30px; padding: 0 8px; border: 1px solid var(--line-1);
                                 border-radius: 7px; background: rgba(255,255,255,.03); color: var(--text-1); font-size: 11px; }
 .capture-item__actions button { padding: 0 12px; height: 30px; border-radius: 7px; font-size: 11px;
@@ -2169,6 +2169,14 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
 .rules-panel { grid-column: 1 / -1; }
 .ingest-panel { grid-column: 1 / -1; }
 .demo-panel { grid-column: 1 / -1; }
+.capture-item__merchant {
+  /* 不能只写 width：这是 flex 行，旁边的下拉框 flex:1、还有两个按钮，
+     不给份额的话它会被挤成 0 宽，输入框在界面上直接消失。 */
+  flex: 1 1 110px; min-width: 96px; height: 30px; padding: 0 8px;
+  border: 1px solid var(--line-1); border-radius: 6px;
+  color: var(--text-1); background: var(--bg-input); font-size: 11px;
+}
+.capture-item__merchant::placeholder { color: var(--text-4); font-size: 10px; }
 
 /* 写入之后的提示条。之前写完什么都不说，预览直接消失，
    用户得自己去别处找数字有没有变。 */

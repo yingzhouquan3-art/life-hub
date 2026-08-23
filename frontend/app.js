@@ -1204,6 +1204,9 @@
               item.suggested ? ` · 按「${escapeHtml(item.suggested.keyword)}」预选` : ''}</small>
           </div>
           <div class="capture-item__actions">
+            <input class="capture-item__merchant" data-capture-merchant="${item.id}"
+                   type="text" maxlength="60" value="${escapeHtml(item.merchant || '')}"
+                   placeholder="商户（填了才会记住）" aria-label="商户名">
             <select data-capture-category="${item.id}" aria-label="支出分类">
               ${CAPTURE_CATEGORIES.map(([key, label]) =>
                 `<option value="${key}"${key === (item.suggested?.category || 'other') ? ' selected' : ''}>${label}</option>`
@@ -1237,9 +1240,14 @@
   async function onConfirmCapture(id) {
     if (state.busy) return;
     const select = els.captureList.querySelector(`[data-capture-category="${id}"]`);
+    const merchantInput = els.captureList.querySelector(`[data-capture-merchant="${id}"]`);
+    const merchant = merchantInput ? merchantInput.value.trim() : '';
     state.busy = true;
     try {
-      const response = await api.confirmCapture(id, { category: select ? select.value : 'other' });
+      const response = await api.confirmCapture(id, {
+        category: select ? select.value : 'other',
+        merchant: merchant || null,
+      });
       state.capture = response.capture_state;
       state.stats = response.stats;
       state.today = response.today;
@@ -1247,6 +1255,17 @@
       renderStats();
       renderToday();
       renderProgress();
+      // 学到了新规则就说一声：这是「以后不用再挑分类」的那一刻，
+      // 不讲出来的话用户根本不知道自己刚教会了它什么。
+      const learned = response.learned_rule;
+      if (learned) {
+        showToast(`已记账，并记住了「${learned.keyword}」→ ${
+          CATEGORY_LABELS[learned.category] || learned.category}，下次自动预选。`);
+      } else if (merchant === '' && (response.transaction?.type === 'expense')) {
+        showToast('已记账。填上商户名的话，下次同一家会自动预选分类。');
+      } else {
+        showToast('已记账。');
+      }
     } finally { state.busy = false; }
   }
 

@@ -276,6 +276,18 @@ class FrontendWiringTests(unittest.TestCase):
         # 金额没解析出来时该去补金额，而不是急着确认
         self.assertIn("quickAmount.focus()", body)
 
+    def test_a_capture_row_lets_you_supply_the_merchant(self):
+        """通知里认不出商户是常事，而没有商户名就学不到任何东西。
+        界面上得能顺手补两个字，否则那条学习链永远不会启动。"""
+        root = Path(__file__).resolve().parents[1] / "frontend"
+        js = (root / "app.js").read_text(encoding="utf-8")
+        css = (root / "style.css").read_text(encoding="utf-8")
+        self.assertIn("data-capture-merchant", js)
+        self.assertIn("merchant: merchant || null", js)
+        # 只写 width 会在 flex 行里被挤成 0 宽，输入框直接从界面上消失
+        start = css.index(".capture-item__merchant")
+        self.assertIn("flex:", css[start:start + 300])
+
     def test_panels_with_a_backend_are_actually_rendered(self):
         """有接口没入口是这个项目的老毛病，补一条就在这里记一条。"""
         root = Path(__file__).resolve().parents[1] / "frontend"
