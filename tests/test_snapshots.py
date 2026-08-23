@@ -71,6 +71,26 @@ class SnapshotTests(unittest.TestCase):
         self.assertEqual(names[0], second["name"])
         self.assertIn(first["name"], names)
 
+    def test_rapid_snapshots_never_overwrite_each_other(self):
+        """同一刻用同样理由连做几次，名字撞了的话 sqlite 的 backup 会把
+        已有文件直接写掉——前一份快照就这么没了，没有任何提示。
+        备份功能里的静默丢失比任何别的 bug 都糟。
+
+        毫秒精度也不够：实测同一毫秒内能做出两份。所以靠占用检测，不靠时钟。
+        """
+        made = [snapshots.take_snapshot("manual") for _ in range(5)]
+        names = [item["name"] for item in made]
+        self.assertEqual(len(set(names)), 5, "快照文件名撞了，前面的被覆盖了")
+        on_disk = list(snapshots.SNAPSHOT_DIR.glob(f"{snapshots.PREFIX}*{snapshots.SUFFIX}"))
+        self.assertEqual(len(on_disk), 5)
+
+    def test_listing_order_survives_identical_timestamps(self):
+        """文件系统时间戳精度有限，同一刻的几份 st_mtime 可能完全相同。
+        那时排序会退化成目录枚举顺序，看着像随机。"""
+        made = [snapshots.take_snapshot("burst") for _ in range(4)]
+        listed = [item["name"] for item in snapshots.list_snapshots()]
+        self.assertEqual(listed, list(reversed([item["name"] for item in made])))
+
     # ---------- 什么时候自动备份 ----------
 
     def test_first_run_always_takes_one(self):

@@ -41,10 +41,10 @@ from backend.modules.ledger import (
 )
 from backend.modules.nutrition import get_nutrition_state
 from backend.modules.recovery import get_recovery_state
-from backend.modules.reflection import get_reflection_state
 from backend.modules.rhythm import get_rhythm_state
 from backend.modules.study import get_study_state
 from backend.views.overview import get_life_overview
+from backend.views.trends import get_reflection_view
 
 router = APIRouter()
 
@@ -124,7 +124,7 @@ def get_state():
             "recovery": get_recovery_state(conn),
             "study": get_study_state(conn),
             "rhythm": get_rhythm_state(conn),
-            "reflection": get_reflection_state(conn),
+            "reflection": get_reflection_view(conn),
             "goals": get_life_goals_state(conn),
             "capture": get_capture_state(conn),
             "import_batches": get_import_batches(conn),

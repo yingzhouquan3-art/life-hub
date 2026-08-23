@@ -428,6 +428,7 @@
     reflectionStatus: $('#reflection-status'),
     reflectionWeekExpense: $('#reflection-week-expense'),
     reflectionWeekFitness: $('#reflection-week-fitness'),
+    reflectionWeekExpenseNote: $('#reflection-week-expense-note'),
     reflectionWeekFitnessNote: $('#reflection-week-fitness-note'),
     reflectionWeekStudy: $('#reflection-week-study'),
     reflectionWeekStudyNote: $('#reflection-week-study-note'),
@@ -2324,6 +2325,23 @@
     });
   }
 
+  /** 「比上周」那一句。
+   *
+   *  复盘的核心问题是「这周比上周怎么样」，而快照原本只给本周的数字。
+   *  判定和数字都来自趋势那一份实现——两个页面对同一件事必须说同样的话。
+   *  不可比时**说出为什么**，不是留白：留白会被读成「没变化」。
+   */
+  function weekOverWeek(metricKey) {
+    const metric = state.reflection?.versus_last_week?.metrics?.[metricKey];
+    if (!metric) return '';
+    const change = metric.change;
+    if (!change.comparable) return ` · 比上周暂不比较（${change.reason.split('，')[0]}）`;
+    if (change.direction === 'flat') return ' · 和上周持平';
+    const sign = change.delta > 0 ? '+' : '';
+    const percent = change.percent == null ? '' : `（${sign}${change.percent}%）`;
+    return ` · 比上周 ${sign}${change.delta}${percent}`;
+  }
+
   function renderToday() {
     const today = state.today || {};
     const monthStatusLabels = { unset: '尚未设置月预算', safe: '预算节奏正常', warning: '预算已接近上限', over: '本月已经超出预算' };
@@ -3150,14 +3168,15 @@
       ? `${week.start_date} — ${week.end_date}`
       : '本周';
     els.reflectionWeekExpense.textContent = fmtCNY(finance.expense || 0);
+    els.reflectionWeekExpenseNote.textContent = `只汇总已记录交易${weekOverWeek('expense')}`;
     els.reflectionWeekFitness.textContent = `${fmtInt(fitness.minutes || 0)} 分钟`;
-    els.reflectionWeekFitnessNote.textContent = `本周 ${fitness.count || 0} 次`;
+    els.reflectionWeekFitnessNote.textContent = `本周 ${fitness.count || 0} 次${weekOverWeek('fitness_minutes')}`;
     els.reflectionWeekStudy.textContent = `${fmtInt(study.minutes || 0)} 分钟`;
-    els.reflectionWeekStudyNote.textContent = `本周 ${study.count || 0} 次${study.avg_focus == null ? '' : ` · 专注 ${study.avg_focus}/5`}`;
+    els.reflectionWeekStudyNote.textContent = `本周 ${study.count || 0} 次${study.avg_focus == null ? '' : ` · 专注 ${study.avg_focus}/5`}${weekOverWeek('study_minutes')}`;
     els.reflectionWeekSleep.textContent = recovery.sleep_hours == null ? '—' : `${recovery.sleep_hours} 小时`;
-    els.reflectionWeekSleepNote.textContent = recovery.sleep_known
+    els.reflectionWeekSleepNote.textContent = (recovery.sleep_known
       ? `${recovery.sleep_known} 天填写了睡眠`
-      : '尚无睡眠记录';
+      : '尚无睡眠记录') + weekOverWeek('sleep_hours');
     els.reflectionWeekFinanceDetail.textContent = `${finance.transaction_count || 0} 笔 · 收入 ${fmtCNY(finance.income || 0)}`;
     els.reflectionWeekNutritionDetail.textContent = `${nutrition.count || 0} 次 · 饮水 ${fmtInt(nutrition.water_ml || 0)}ml`;
     els.reflectionWeekRecoveryDetail.textContent = `精力 ${recovery.energy ?? '—'} · 心情 ${recovery.mood ?? '—'}`;

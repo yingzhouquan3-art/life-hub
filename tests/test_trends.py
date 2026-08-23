@@ -13,7 +13,8 @@ from fastapi import HTTPException
 
 from backend import main
 from backend.core import db as db_core
-from backend.views.trends import MIN_DAYS_PER_PERIOD, get_trends
+from backend.views.trends import (MIN_DAYS_PER_PERIOD, get_reflection_view,
+                                  get_trends, get_week_over_week)
 
 
 class TrendTests(unittest.TestCase):
@@ -186,6 +187,72 @@ class TrendTests(unittest.TestCase):
         from backend.views.insights import METRICS
         from backend.views.trends import AGGREGATIONS
         self.assertEqual(set(METRICS), set(AGGREGATIONS))
+
+
+class WeekOverWeekTests(unittest.TestCase):
+    """每周复盘那张快照上的「比上周」。
+
+    它必须和趋势页说同样的话：复盘页说「支出降了 8%」而趋势页说「暂不比较」
+    的话，用户不知道该信哪个。所以这里复用同一套分桶与可比性判定。
+    """
+
+    def setUp(self):
+        self.original_db_path = db_core.current_path()
+        self.temp_dir = tempfile.TemporaryDirectory()
+        db_core.use_database(Path(self.temp_dir.name) / "ledger.db")
+        main.init_db()
+        today = date.today()
+        self.monday = today - timedelta(days=today.weekday())
+        self.last_monday = self.monday - timedelta(days=7)
+        with main.db() as conn:
+            self.account_id = conn.execute(
+                "SELECT id FROM accounts ORDER BY id LIMIT 1").fetchone()["id"]
+
+    def tearDown(self):
+        db_core.use_database(self.original_db_path)
+        self.temp_dir.cleanup()
+
+    def sleep(self, day, hours):
+        with main.db() as conn:
+            conn.execute(
+                """INSERT INTO recovery_checkins (occurred_on, sleep_hours, note, updated_at)
+                   VALUES (?, ?, '', '2026-01-01')""", (day.isoformat(), hours))
+
+    def test_it_reports_a_real_change(self):
+        for offset in range(5):
+            self.sleep(self.last_monday + timedelta(days=offset), 8.0)
+            self.sleep(self.monday + timedelta(days=offset), 6.0)
+        with main.db() as conn:
+            change = get_week_over_week(conn)["metrics"]["sleep_hours"]["change"]
+        self.assertTrue(change["comparable"])
+        self.assertEqual(change["delta"], -2.0)
+
+    def test_it_refuses_the_same_cases_the_trends_view_refuses(self):
+        """两个页面对同一件事必须给同一个答案。"""
+        for offset in range(2):
+            self.sleep(self.last_monday + timedelta(days=offset), 8.0)
+        for offset in range(6):
+            self.sleep(self.monday + timedelta(days=offset), 6.0)
+        with main.db() as conn:
+            weekly = get_week_over_week(conn)["metrics"]["sleep_hours"]["change"]
+            trend = next(m for m in get_trends(conn, "week", 6)["metrics"]
+                         if m["key"] == "sleep_hours")["change"]
+        self.assertEqual(weekly["comparable"], trend["comparable"])
+        self.assertEqual(weekly["reason"], trend["reason"])
+
+    def test_every_weekly_metric_is_a_known_metric(self):
+        """挑错名字的话那一项会静默消失，界面上只是少一行，没人会发现。"""
+        from backend.views.insights import METRICS
+        from backend.views.trends import WEEKLY_METRICS
+        self.assertTrue(set(WEEKLY_METRICS) <= set(METRICS))
+
+    def test_the_reflection_view_carries_the_comparison(self):
+        """页面从 /api/state 拿 reflection，不是从 /api/reflection。
+        只在一处附上对比的话，页面上什么都不会显示。"""
+        with main.db() as conn:
+            view = get_reflection_view(conn)
+        self.assertIn("versus_last_week", view)
+        self.assertIn("weekly", view)
 
 
 if __name__ == "__main__":

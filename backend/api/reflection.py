@@ -8,8 +8,9 @@ from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from backend.core.db import db
-from backend.modules.reflection import get_reflection_state, save_daily_reflection
+from backend.modules.reflection import save_daily_reflection
 from backend.views.overview import get_life_overview
+from backend.views.trends import get_reflection_view
 
 router = APIRouter()
 
@@ -30,7 +31,7 @@ def reflection_state(reflection_date: Optional[str] = Query(None, alias="date"))
         except ValueError as exc:
             raise HTTPException(400, "invalid reflection date") from exc
     with db() as conn:
-        return get_reflection_state(conn, reflection_date)
+        return get_reflection_view(conn, reflection_date)
 
 
 @router.post("/api/reflections")
@@ -51,7 +52,7 @@ def set_daily_reflection(body: DailyReflectionIn):
         )
         return {
             "reflection": reflection,
-            "reflection_state": get_reflection_state(conn, occurred_on),
+            "reflection_state": get_reflection_view(conn, occurred_on),
             "life": get_life_overview(conn),
         }
 
@@ -67,6 +68,6 @@ def delete_daily_reflection(reflection_id: int):
         conn.execute("DELETE FROM daily_reflections WHERE id = ?", (reflection_id,))
         return {
             "deleted": reflection_id,
-            "reflection": get_reflection_state(conn, row["occurred_on"]),
+            "reflection": get_reflection_view(conn, row["occurred_on"]),
             "life": get_life_overview(conn),
         }

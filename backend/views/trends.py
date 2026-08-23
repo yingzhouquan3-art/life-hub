@@ -187,3 +187,60 @@ def get_trends(conn, period: str = "week", count: int = 6) -> dict:
             "这里只描述变化，不评价好坏。"
         ),
     }
+
+# 每周复盘那张快照上要显示的几项。挑的是「一周之内真的会变、且看了有意义」
+# 的指标——体重一周动不了多少，训练容量不是每个人都在记。
+WEEKLY_METRICS = ("expense", "sleep_hours", "study_minutes", "fitness_minutes", "energy", "mood")
+
+
+def get_week_over_week(conn, anchor: Optional[date] = None) -> dict:
+    """本周对上周，给每周复盘用。
+
+    直接复用上面那套分桶和可比性判定，不另写一份：复盘页说「支出降了 8%」
+    而趋势页说「暂不比较」的话，用户不知道该信哪个。
+
+    只回最近两期。判定规则一模一样——两期记录疏密悬殊就不给数字，
+    因为那个差别多半是记录习惯造成的，不是生活真的变了。
+    """
+    today = anchor or date.today()
+    bounds = _week_starts(today, 2)
+    earliest = bounds[0][0].isoformat()
+    out = {}
+    for key in WEEKLY_METRICS:
+        label, unit, _ = METRICS[key]
+        values = _daily_values(conn, key, earliest)
+        buckets = []
+        for start, end, bucket_label in bounds:
+            days = [v for day, v in values.items()
+                    if start.isoformat() <= day <= end.isoformat()]
+            if not days:
+                buckets.append(None)
+                continue
+            total = round(sum(days), 2)
+            buckets.append({"label": bucket_label, "days": len(days),
+                            "total": total if AGGREGATIONS[key] == "sum" else None,
+                            "average": round(total / len(days), 2)})
+        out[key] = {
+            "label": label, "unit": unit, "aggregation": AGGREGATIONS[key],
+            "this_week": buckets[-1], "last_week": buckets[-2],
+            "change": _describe_change(buckets[-1], buckets[-2]),
+        }
+    return {
+        "metrics": out,
+        "note": "和上周比的是「有记录那些天的日均」。两周记录多少差太远时不给数字，"
+                "那种差别多半来自记录习惯，不是生活真的变了。",
+    }
+
+def get_reflection_view(conn, anchor_date: Optional[str] = None) -> dict:
+    """复盘模块的状态，外加「本周对上周」。
+
+    放在 views/ 而不是 modules/：modules 不能反向依赖 views，而这个对比
+    要用趋势那套算法。两个路由（/api/state 和 /api/reflection）都调这里，
+    免得各贴一行然后慢慢走偏——那种走偏的表现是同一个页面在两条加载路径下
+    显示的东西不一样，非常难查。
+    """
+    from backend.modules.reflection import get_reflection_state
+
+    state = get_reflection_state(conn, anchor_date)
+    state["versus_last_week"] = get_week_over_week(conn)
+    return state

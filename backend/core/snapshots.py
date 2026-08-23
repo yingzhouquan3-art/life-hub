@@ -52,7 +52,10 @@ def list_snapshots() -> list[dict]:
             "created_at": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
             "_mtime": stat.st_mtime,
         })
-    items.sort(key=lambda item: item["_mtime"], reverse=True)
+    # 文件系统的时间戳精度有限，同一刻做的两份 st_mtime 可能完全相同，
+    # 这时排序会退化成目录枚举顺序（看着像随机）。用文件名兜底：
+    # 名字里带毫秒时间戳，字典序就是时间序。
+    items.sort(key=lambda item: (item["_mtime"], item["name"]), reverse=True)
     for item in items:
         del item["_mtime"]
     return items
@@ -68,9 +71,27 @@ def take_snapshot(reason: str = "auto") -> dict:
     if not source_path.exists():
         raise FileNotFoundError(f"数据库不存在：{source_path}")
 
-    stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    # 名字撞了的话，sqlite 的 backup 会直接把已有文件写掉——
+    # **前一份快照就这么没了**，没有任何提示。备份功能里的静默丢失最糟。
+    #
+    # 不靠时钟保证唯一：毫秒精度在快机器上照样会撞（实测同一毫秒内做两份）。
+    # 直接看文件在不在，占用了就换一个。
     safe_reason = "".join(ch for ch in reason if ch.isalnum() or ch in "-_") or "auto"
-    target = snapshot_dir() / f"{PREFIX}{stamp}-{safe_reason}{SUFFIX}"
+    directory = snapshot_dir()
+
+    # 撞名了就把时间戳往后挪一毫秒再试，而不是在名字后面加序号。
+    #
+    # 加序号会让新文件在字典序里排到旧文件**前面**（'.' 大于 '-'，
+    # 所以 "…-burst.db" > "…-burst-2.db"），而 st_mtime 相同时排序正是靠
+    # 文件名兜底的——那样一来「最新在前」就反了。挪时间戳则让名字天生单调：
+    # 字典序永远等于创建顺序。
+    moment = datetime.now()
+    while True:
+        stamp = moment.strftime("%Y%m%d-%H%M%S-%f")[:-3]
+        target = directory / f"{PREFIX}{stamp}-{safe_reason}{SUFFIX}"
+        if not target.exists():
+            break
+        moment += timedelta(milliseconds=1)
 
     source = sqlite3.connect(source_path)
     destination = sqlite3.connect(target)
