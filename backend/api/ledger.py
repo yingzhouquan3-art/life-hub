@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 from backend.core.config import EXPENSE_CATEGORIES
 from backend.core.db import db
+from backend.modules.categorize import learn_category
 from backend.modules.ledger import (
     compute_monthly,
     compute_stats,
@@ -29,6 +30,8 @@ from backend.modules.ledger import (
     get_subscription_overview,
     get_today_overview,
     parse_quick_entry,
+    recategorise_transactions,
+    restore_categories,
     save_category_budget,
     save_planning_settings,
     update_transaction,
@@ -137,6 +140,23 @@ class TransactionPatchIn(BaseModel):
     ] = None
     account_id: Optional[int] = None
     note: Optional[str] = Field(None, max_length=120)
+
+
+class RecategoriseIn(BaseModel):
+    """把一批支出改成同一个分类。"""
+
+    ids: list[int] = Field(..., min_length=1, max_length=2000)
+    category: Literal["food", "transport", "study", "housing", "medical",
+                      "entertainment", "social", "digital", "other"]
+    # 填了就顺手记一条商户规则，下次同名商户自动预选这个分类。
+    # 整理完这一批还得防着下一批再落进「其他」，否则每次导入都要重来一遍。
+    remember_keyword: Optional[str] = Field(None, max_length=40)
+
+
+class RestoreCategoriesIn(BaseModel):
+    """撤销一次批量改分类。entries 是改动时返回的那份原分类清单。"""
+
+    entries: list[dict] = Field(..., min_length=1, max_length=2000)
 
 
 class RecurringBillIn(BaseModel):
@@ -489,6 +509,47 @@ def delete_savings_goal(goal_id: int):
             raise HTTPException(404, "goal not found")
         conn.execute("UPDATE savings_goals SET is_active = 0 WHERE id = ?", (goal_id,))
         return get_planning(conn)
+
+
+@router.post("/api/transactions/recategorize")
+def recategorise(body: RecategoriseIn):
+    """把一批支出改成同一个分类。
+
+    给「导入几百条之后，把落进『其他』的那些整理掉」用的。逐笔改也能做到，
+    但那是几百次点击，没人会真去做——不做的结果是分类统计里永远杵着一根
+    巨大的「其他」柱子。
+    """
+    with db() as conn:
+        result = recategorise_transactions(conn, body.ids, body.category)
+        learned = None
+        if body.remember_keyword and body.remember_keyword.strip():
+            # 这一条**是**用户的明确确认（他选了分类又主动要求记住），
+            # 所以这里学规则不违反「批量导入不学习」那条边界：
+            # 那条防的是系统拿自己的猜测自我强化，不是防用户教它。
+            learned = learn_category(conn, body.remember_keyword.strip(),
+                                     body.category, keyword=body.remember_keyword.strip())
+        return {
+            **result,
+            "learned_rule": learned,
+            "stats": compute_stats(conn),
+            "monthly": compute_monthly(conn),
+            "planning": get_planning(conn),
+            "today": get_today_overview(conn),
+        }
+
+
+@router.post("/api/transactions/restore-categories")
+def restore_transaction_categories(body: RestoreCategoriesIn):
+    """撤销一次批量改分类，按改动前的原分类逐笔放回。"""
+    with db() as conn:
+        restored = restore_categories(conn, body.entries)
+        return {
+            "restored": restored,
+            "stats": compute_stats(conn),
+            "monthly": compute_monthly(conn),
+            "planning": get_planning(conn),
+            "today": get_today_overview(conn),
+        }
 
 
 @router.patch("/api/transactions/{transaction_id}")

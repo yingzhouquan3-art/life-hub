@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=20260823-ux-11">
+  <link rel="stylesheet" href="./style.css?v=20260823-recat-2">
 </head>
 <body>
 
@@ -776,6 +776,23 @@
               <button id="btn-search">搜索</button><button class="search-reset" id="btn-reset-search">重置</button>
             </div>
             <div class="search-summary" id="search-summary">尚未执行搜索。</div>
+            <div class="recat-bar" id="recat-bar" hidden>
+              <span id="recat-count">已选 0 笔</span>
+              <label><span>设为</span>
+                <select id="recat-category" aria-label="改成哪个分类">
+                  <option value="food">餐饮</option><option value="transport">交通</option>
+                  <option value="study">学习</option><option value="housing">住宿</option>
+                  <option value="medical">医疗</option><option value="entertainment">娱乐</option>
+                  <option value="social">社交</option><option value="digital">数字服务</option>
+                  <option value="other">其他</option>
+                </select>
+              </label>
+              <label class="recat-remember">
+                <input id="recat-remember" type="text" maxlength="40" placeholder="同时记住这个商户（可留空）">
+              </label>
+              <button id="btn-recat-apply">应用</button>
+              <button class="search-reset" id="btn-recat-clear">取消选择</button>
+            </div>
             <div class="search-results" id="search-results"></div>
           </section>
 
@@ -1295,6 +1312,6 @@
   </div>
 
   <script src="./grid.js"></script>
-  <script src="./app.js?v=20260823-ux-11"></script>
+  <script src="./app.js?v=20260823-recat-2"></script>
 </body>
 </html>

@@ -58,6 +58,8 @@
     quickCommit: (body) => post(`${API}/quick/commit`, body),
     calendar: () => fetch(`${API}/calendar`).then(r => r.json()),
     annualReport: (year) => fetch(`${API}/reports/annual?year=${encodeURIComponent(year)}`).then(r => r.json()),
+    recategorise: (body) => post(`${API}/transactions/recategorize`, body),
+    restoreCategories: (entries) => post(`${API}/transactions/restore-categories`, { entries }),
     searchTransactions: async (params = {}) => {
       const query = new URLSearchParams();
       Object.entries(params).forEach(([key, value]) => {
@@ -308,6 +310,8 @@
     quickPreview: null,
     annualReport: null,
     searchResult: { transactions: [], summary: { count: 0, income: 0, expense: 0, net: 0 } },
+    // 批量改分类时勾选了哪几笔。翻页/重搜后仍然保留，方便跨页整理。
+    pickedTx: new Set(),
     restoreSnapshot: null,
     txType: 'income',
     txSource: 'family_support',
@@ -813,6 +817,12 @@
     btnResetSearch: $('#btn-reset-search'),
     searchSummary: $('#search-summary'),
     searchResults: $('#search-results'),
+    recatBar: $('#recat-bar'),
+    recatCount: $('#recat-count'),
+    recatCategory: $('#recat-category'),
+    recatRemember: $('#recat-remember'),
+    btnRecatApply: $('#btn-recat-apply'),
+    btnRecatClear: $('#btn-recat-clear'),
 
     canvas: $('#grid'),
     starfield: $('#starfield'),
@@ -2802,11 +2812,92 @@
     const results = state.searchResult?.transactions || [];
     els.searchSummary.textContent = `共 ${fmtInt(searchSummary.count)} 笔 · 收入 ${fmtCNY(searchSummary.income)} · 支出 ${fmtCNY(searchSummary.expense)} · 净额 ${fmtSignedCNY(searchSummary.net)}`;
     els.searchResults.innerHTML = results.length ? `
-      <table class="search-table"><thead><tr><th>日期</th><th>类型</th><th>账户</th><th>分类 / 来源</th><th>备注</th><th>金额</th></tr></thead>
+      <table class="search-table"><thead><tr>
+        <th class="search-pick"><input type="checkbox" id="search-pick-all" aria-label="选中这一页所有支出" title="选中这一页所有支出"></th>
+        <th>日期</th><th>类型</th><th>账户</th><th>分类 / 来源</th><th>备注</th><th>金额</th></tr></thead>
       <tbody>${results.map(tx => {
         const label = tx.type === 'income' ? (SOURCE_LABELS[tx.source] || '家庭生活费') : (CATEGORY_LABELS[tx.category] || '其他');
-        return `<tr><td>${tx.occurred_on}</td><td>${tx.type === 'income' ? '收入' : '支出'}</td><td>${escapeHtml(tx.account_name || '未分配')}</td><td>${escapeHtml(label)}</td><td>${escapeHtml(tx.note || '')}</td><td class="search-amount--${tx.type}">${tx.type === 'income' ? '+' : '−'}${fmtCNY(tx.amount)}</td></tr>`;
+        const picked = state.pickedTx.has(tx.id);
+        // 只有支出能勾：收入没有支出分类，给它一个勾选框只会让人以为能改
+        const box = tx.type === 'expense'
+          ? `<input type="checkbox" data-pick-tx="${tx.id}"${picked ? ' checked' : ''} aria-label="选中这笔">`
+          : '';
+        return `<tr${picked ? ' class="is-picked"' : ''}><td class="search-pick">${box}</td><td>${tx.occurred_on}</td><td>${tx.type === 'income' ? '收入' : '支出'}</td><td>${escapeHtml(tx.account_name || '未分配')}</td><td>${escapeHtml(label)}</td><td>${escapeHtml(tx.note || '')}</td><td class="search-amount--${tx.type}">${tx.type === 'income' ? '+' : '−'}${fmtCNY(tx.amount)}</td></tr>`;
       }).join('')}</tbody></table>` : '<div class="goal-empty">没有符合条件的交易。</div>';
+
+    els.searchResults.querySelectorAll('[data-pick-tx]').forEach(box => {
+      box.addEventListener('change', () => {
+        const id = Number(box.dataset.pickTx);
+        if (box.checked) state.pickedTx.add(id); else state.pickedTx.delete(id);
+        renderDataCenter();
+      });
+    });
+    const pickAll = els.searchResults.querySelector('#search-pick-all');
+    if (pickAll) {
+      const expenses = results.filter(tx => tx.type === 'expense').map(tx => tx.id);
+      pickAll.checked = expenses.length > 0 && expenses.every(id => state.pickedTx.has(id));
+      pickAll.addEventListener('change', () => {
+        expenses.forEach(id => pickAll.checked ? state.pickedTx.add(id) : state.pickedTx.delete(id));
+        renderDataCenter();
+      });
+    }
+    renderRecatBar(results);
+  }
+
+  /** 批量改分类那条横幅。
+   *
+   *  导入几百条之后总有一批落进「其他」——商户名没被规则认出来。逐笔改也能做到，
+   *  但那是几百次点击，没人会真去做；不做的结果是分类统计里永远杵着一根巨大的
+   *  「其他」柱子，之后所有关于「钱花在哪」的分析都是废的。
+   */
+  function renderRecatBar(results) {
+    const count = state.pickedTx.size;
+    els.recatBar.hidden = count === 0;
+    if (!count) return;
+    els.recatCount.textContent = `已选 ${fmtInt(count)} 笔`;
+    // 选中的备注完全一致时，把它填进「同时记住」——那多半就是商户名。
+    // 不一致就留空，不猜：记错的规则会一直错下去。
+    const notes = new Set(results.filter(tx => state.pickedTx.has(tx.id))
+                                 .map(tx => (tx.note || '').trim()).filter(Boolean));
+    if (notes.size === 1 && !els.recatRemember.dataset.touched) {
+      els.recatRemember.value = [...notes][0].slice(0, 40);
+    }
+  }
+
+  async function applyRecategorise() {
+    const ids = [...state.pickedTx];
+    if (state.busy || !ids.length) return;
+    state.busy = true;
+    els.btnRecatApply.disabled = true;
+    try {
+      const keyword = els.recatRemember.value.trim();
+      const result = await api.recategorise({
+        ids, category: els.recatCategory.value, remember_keyword: keyword || null,
+      });
+      state.pickedTx.clear();
+      els.recatRemember.value = '';
+      delete els.recatRemember.dataset.touched;
+      await loadAndPaint();
+      const label = CATEGORY_LABELS[result.category] || result.category;
+      const learned = result.learned_rule
+        ? `，并记住了「${result.learned_rule.keyword}」→ ${label}` : '';
+      const skipped = result.skipped.length
+        ? `（跳过 ${fmtInt(result.skipped.length)} 笔：${result.skipped[0].reason}）` : '';
+      showToast(`已把 ${fmtInt(result.changed.length)} 笔改为${label}${learned}${skipped}`,
+        result.changed.length ? {
+          action: '撤销',
+          onAction: async () => {
+            await api.restoreCategories(result.changed);
+            await loadAndPaint();
+            showToast('已改回原来的分类。');
+          },
+        } : undefined);
+    } catch (error) {
+      showToast(cleanError(error, '改分类失败'), { tone: 'warn' });
+    } finally {
+      state.busy = false;
+      els.btnRecatApply.disabled = false;
+    }
   }
 
   async function refreshDataCenterData() {
@@ -3452,7 +3543,11 @@
     const [data, annual, search, lifeCalendar] = await Promise.all([
       api.state(),
       api.annualReport(reportYear),
-      api.searchTransactions({ limit: 200 }),
+      // 用当前的筛选条件重取，不要退回「全部」。
+      // 搜索面板的筛选是用户设好的状态，后台刷新不该悄悄把它清掉——
+      // 整理「其他」时每改一批列表就跳回全部，等于每次都要重新筛一遍；
+      // 删一笔账时也一样会重置。
+      api.searchTransactions(currentSearchParams()),
       api.lifeCalendar(),
     ]);
     state.settings = data.settings;
@@ -4712,6 +4807,9 @@
   function syncRestoreButton() {
     els.btnRestoreBackup.disabled = !state.restoreSnapshot || els.restoreConfirm.value.trim() !== '恢复';
   }
+  els.btnRecatApply.addEventListener('click', applyRecategorise);
+  els.btnRecatClear.addEventListener('click', () => { state.pickedTx.clear(); renderDataCenter(); });
+  els.recatRemember.addEventListener('input', () => { els.recatRemember.dataset.touched = '1'; });
   els.btnDemoLoad.addEventListener('click', onDemoLoad);
   els.btnDemoRemove.addEventListener('click', onDemoRemove);
   els.trendsPeriod.addEventListener('change', refreshTrends);

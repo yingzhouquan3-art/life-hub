@@ -419,6 +419,60 @@ def get_semester(conn) -> dict:
     return semester
 
 
+def recategorise_transactions(conn, ids: list[int], category: str) -> dict:
+    """把一批支出改成同一个分类，并记下每一笔原来是什么。
+
+    这是给「导入几百条之后，把落进『其他』的那些整理掉」用的。逐笔改也能做到，
+    但那是几百次点击，没人会真去做——不做的结果就是分类统计里永远杵着一根
+    巨大的「其他」柱子，分析全废。
+
+    返回 changed 里带着每一笔的原分类，撤销时照着放回去。整批改完发现选错了
+    分类，得能一次退回来，而不是再手工改几百笔。
+
+    收入没有支出分类，遇到就跳过并说明，不是静默忽略。
+    """
+    if category not in EXPENSE_CATEGORIES:
+        raise HTTPException(400, f"未知分类：{category}")
+    if not ids:
+        raise HTTPException(400, "没有选中任何交易")
+
+    placeholders = ", ".join("?" for _ in ids)
+    rows = conn.execute(
+        f"SELECT id, type, category FROM transactions WHERE id IN ({placeholders})", ids
+    ).fetchall()
+    found = {row["id"]: dict(row) for row in rows}
+
+    changed, skipped = [], []
+    for tx_id in ids:
+        row = found.get(tx_id)
+        if not row:
+            skipped.append({"id": tx_id, "reason": "这笔交易已经不在了"})
+            continue
+        if row["type"] != "expense":
+            skipped.append({"id": tx_id, "reason": "收入没有支出分类"})
+            continue
+        if row["category"] == category:
+            continue  # 本来就是这个分类，不算改动也不必记进撤销清单
+        conn.execute("UPDATE transactions SET category = ? WHERE id = ?", (category, tx_id))
+        changed.append({"id": tx_id, "from": row["category"]})
+
+    return {"changed": changed, "skipped": skipped, "category": category}
+
+
+def restore_categories(conn, entries: list[dict]) -> int:
+    """把 recategorise_transactions 改过的那些放回原样。"""
+    restored = 0
+    for entry in entries:
+        previous = entry.get("from")
+        if previous not in EXPENSE_CATEGORIES:
+            continue
+        cursor = conn.execute(
+            "UPDATE transactions SET category = ? WHERE id = ? AND type = 'expense'",
+            (previous, entry["id"]))
+        restored += cursor.rowcount
+    return restored
+
+
 _UNSET = object()  # 「这个字段没传」和「传了 None」是两回事
 
 
@@ -445,16 +499,25 @@ def update_transaction(
     if not row:
         raise HTTPException(404, "transaction not found")
 
-    payment = conn.execute(
-        "SELECT bill_id, month FROM recurring_bill_payments WHERE transaction_id = ?",
-        (transaction_id,),
-    ).fetchone()
-    if payment:
-        raise HTTPException(
-            400,
-            f"这笔是固定账单在 {payment['month']} 的支付记录，改它会让账单日历对不上。"
-            "请先在日历里撤销这次支付，再重新记一笔。",
-        )
+    # 账单支付生成的交易：只有改日期、金额、方向才会让账单日历对不上，
+    # 那三样被账单按月引用着。改分类或备注不影响任何引用关系。
+    #
+    # 早先这里一律拒绝，那对「把一堆『其他』重新归类」这种整理工作是过度限制：
+    # 用户只是想给它一个正确的分类，却被挡在门外还不知道为什么。
+    touches_linkage = any(value is not _UNSET
+                          for value in (occurred_on, amount, type))
+    if touches_linkage:
+        payment = conn.execute(
+            "SELECT bill_id, month FROM recurring_bill_payments WHERE transaction_id = ?",
+            (transaction_id,),
+        ).fetchone()
+        if payment:
+            raise HTTPException(
+                400,
+                f"这笔是固定账单在 {payment['month']} 的支付记录，"
+                "改日期或金额会让账单日历对不上。请先在日历里撤销这次支付，再重新记一笔。"
+                "（只改分类或备注是可以的。）",
+            )
 
     current = dict(row)
     new_type = current["type"] if type is _UNSET else type

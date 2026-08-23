@@ -329,6 +329,26 @@ class FrontendWiringTests(unittest.TestCase):
         self.assertNotIn("btnAnalyzeStatement", js, "面板删了，JS 也不能留着引用它")
         self.assertNotIn("renderStatementPreview", js)
 
+    def test_search_results_can_be_recategorised_in_bulk(self):
+        """搜索结果原本是只读表格，而主交易列表只显示最近 50 条——
+        导入几百条之后，落进「其他」的那些根本够不到。"""
+        root = Path(__file__).resolve().parents[1] / "frontend"
+        js = (root / "app.js").read_text(encoding="utf-8")
+        html = (root / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="recat-bar"', html)
+        self.assertIn("data-pick-tx", js)
+        self.assertIn("applyRecategorise", js)
+
+    def test_a_background_reload_keeps_the_user_search_filter(self):
+        """整理「其他」时每改一批列表就跳回全部，等于每次都要重新筛一遍。
+        筛选是用户设好的状态，后台刷新不该悄悄清掉它。"""
+        root = Path(__file__).resolve().parents[1] / "frontend"
+        js = (root / "app.js").read_text(encoding="utf-8")
+        start = js.index("async function loadAndPaint()")
+        body = js[start:start + 700]
+        self.assertIn("currentSearchParams()", body)
+        self.assertNotIn("searchTransactions({ limit: 200 })", body)
+
     def test_panels_with_a_backend_are_actually_rendered(self):
         """有接口没入口是这个项目的老毛病，补一条就在这里记一条。"""
         root = Path(__file__).resolve().parents[1] / "frontend"
