@@ -2385,6 +2385,24 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
 .rule-tag { padding: 1px 5px; border-radius: 4px; font-size: 9px; }
 .rule-tag--seed { color: var(--text-4); background: rgba(255,255,255,.05); }
 .rule-tag--learned { color: #9cc3ff; background: rgba(156,195,255,.08); }
+.rule-row.is-editing { flex-wrap: wrap; align-items: flex-start; }
+.rule-row.is-editing .rule-row__meta button { opacity: .35; pointer-events: none; }
+.rule-edit {
+  flex: 0 0 100%;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px;
+  margin-top: 7px; padding-top: 7px; border-top: 1px solid var(--line-1);
+}
+.rule-edit input, .rule-edit select {
+  height: 26px; padding: 0 7px; border: 1px solid var(--line-1); border-radius: 6px;
+  color: var(--text-1); background: var(--bg-input); font-size: 11px;
+}
+.rule-edit input { flex: 1 1 110px; min-width: 90px; }
+.rule-edit button {
+  height: 26px; padding: 0 12px; border-radius: 6px; font-size: 10px;
+  color: #9cc3ff; background: rgba(156,195,255,.08);
+}
+.rule-edit button[data-cancel] { color: var(--text-3); background: transparent; border: 1px solid var(--line-1); }
+.rule-edit__error { flex: 0 0 100%; margin: 2px 0 0; color: #ff9c9c; font-size: 10px; }
 .annual-actions { display: flex; gap: 5px; }
 .annual-actions input { width: 78px; height: 30px; padding: 0 7px; border: 1px solid var(--line-1); border-radius: 6px; color: var(--text-1); background: var(--bg-input); }
 .annual-actions button { height: 30px; padding: 0 8px; border-radius: 6px; color: #9cc3ff; font-size: 9.5px; background: rgba(156,195,255,.055); }

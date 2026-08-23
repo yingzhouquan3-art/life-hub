@@ -176,6 +176,14 @@
     },
     trends: (period, count) => fetch(`${API}/insights/trends?period=${period}&count=${count}`).then(r => r.json()),
     addRule: (body) => post(`${API}/categorize/rules`, body),
+    patchRule: async (id, body) => {
+      const response = await fetch(`${API}/categorize/rules/${id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) throw new Error(`${response.status} ${await response.text()}`);
+      return response.json();
+    },
     delRule: async (id) => {
       const response = await fetch(`${API}/categorize/rules/${id}`, { method: 'DELETE' });
       if (!response.ok) throw new Error(`${response.status} ${await response.text()}`);
@@ -1862,12 +1870,78 @@
       <div class="rule-row__meta">
         <span class="rule-tag rule-tag--${rule.source}">${rule.source === 'seed' ? '内置' : '学来的'}</span>
         <small>${rule.hits ? `命中 ${fmtInt(rule.hits)} 次` : '还没命中过'}</small>
+        <button data-rule-edit="${rule.id}" title="改这条规则">改</button>
         <button data-rule-delete="${rule.id}" title="删除这条规则">删除</button>
       </div>
     </div>`).join('');
 
     els.rulesList.querySelectorAll('[data-rule-delete]').forEach(button => {
       button.addEventListener('click', () => onDeleteRule(Number(button.dataset.ruleDelete)));
+    });
+    els.rulesList.querySelectorAll('[data-rule-edit]').forEach(button => {
+      button.addEventListener('click', () => openRuleEditor(button.closest('.rule-row'),
+        rules.find(item => item.id === Number(button.dataset.ruleEdit))));
+    });
+  }
+
+  /** 就地改一条规则。
+   *
+   *  改分类靠「同名再添加一次」也能做到（那边是 upsert），但**关键字本身改不了**——
+   *  写错一个字只能删了重建，而重建会把命中次数清零，也丢掉这条规则从什么时候
+   *  开始生效。规则是用户自己积累的东西，改错一个字不该要求他重来。
+   */
+  function openRuleEditor(row, rule) {
+    if (!row || !rule || row.classList.contains('is-editing')) return;
+    row.classList.add('is-editing');
+
+    const form = document.createElement('form');
+    form.className = 'rule-edit';
+    form.innerHTML = `
+      <input name="keyword" type="text" maxlength="40" value="${escapeHtml(rule.keyword)}" required
+             aria-label="关键字">
+      <select name="category" aria-label="分类">${
+        Object.entries(CATEGORY_LABELS).map(([key, label]) =>
+          `<option value="${key}"${key === rule.category ? ' selected' : ''}>${label}</option>`).join('')
+      }</select>
+      <button type="submit">保存</button>
+      <button type="button" data-cancel>取消</button>
+      <p class="rule-edit__error" hidden></p>`;
+    row.appendChild(form);
+    const keywordInput = form.querySelector('[name="keyword"]');
+    keywordInput.focus();
+    keywordInput.select();
+
+    const close = () => { row.classList.remove('is-editing'); form.remove(); };
+    form.querySelector('[data-cancel]').addEventListener('click', close);
+    form.addEventListener('keydown', event => { if (event.key === 'Escape') close(); });
+
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (state.busy) return;
+      const keyword = keywordInput.value.trim();
+      const category = form.querySelector('[name="category"]').value;
+      // 只发真的改了的字段，没改的不该出现在请求里
+      const patch = {};
+      if (keyword !== rule.keyword) patch.keyword = keyword;
+      if (category !== rule.category) patch.category = category;
+      if (!Object.keys(patch).length) { close(); return; }
+
+      const error = form.querySelector('.rule-edit__error');
+      error.hidden = true;
+      state.busy = true;
+      try {
+        const response = await api.patchRule(rule.id, patch);
+        state.categorize = response.categorize;
+        close();
+        renderRules();
+        showToast(`已改成「${response.rule.keyword}」→ ${
+          CATEGORY_LABELS[response.rule.category] || response.rule.category}`);
+      } catch (err) {
+        error.textContent = cleanError(err, '改不了这条规则');
+        error.hidden = false;
+      } finally {
+        state.busy = false;
+      }
     });
   }
 

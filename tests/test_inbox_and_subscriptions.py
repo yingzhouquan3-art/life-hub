@@ -349,6 +349,17 @@ class FrontendWiringTests(unittest.TestCase):
         self.assertIn("currentSearchParams()", body)
         self.assertNotIn("searchTransactions({ limit: 200 })", body)
 
+    def test_rules_can_be_added_edited_and_deleted_from_the_panel(self):
+        """规则是用户自己积累的东西。加和删本来就有，但**改不了关键字**——
+        写错一个字只能删了重建，而重建会把命中次数清零。"""
+        root = Path(__file__).resolve().parents[1] / "frontend"
+        js = (root / "app.js").read_text(encoding="utf-8")
+        self.assertIn("btn-add-rule", js)          # 加
+        self.assertIn("data-rule-delete", js)      # 删
+        self.assertIn("data-rule-edit", js)        # 改
+        self.assertIn("openRuleEditor", js)
+        self.assertIn("patchRule", js)
+
     def test_panels_with_a_backend_are_actually_rendered(self):
         """有接口没入口是这个项目的老毛病，补一条就在这里记一条。"""
         root = Path(__file__).resolve().parents[1] / "frontend"

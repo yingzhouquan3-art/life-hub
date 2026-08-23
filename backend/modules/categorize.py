@@ -131,6 +131,51 @@ def list_rules(conn, include_inactive: bool = False) -> list[dict]:
     return [dict(row) for row in rows]
 
 
+def update_rule(conn, rule_id: int, *, keyword: Optional[str] = None,
+                category: Optional[str] = None) -> dict:
+    """改一条已有规则的关键字或分类。
+
+    改分类也可以走「用同一个关键字再添加一次」（那边是 upsert），但关键字本身
+    改不了——写错一个字只能删了重建，而重建会把命中次数清零，也丢掉这条规则
+    是什么时候开始生效的。
+
+    关键字有唯一约束，改成一个已经存在的名字会撞车。这里明说撞上了谁，
+    不静默合并：两条规则合成一条是用户可能并不想要的结果。
+    """
+    row = conn.execute("SELECT * FROM merchant_rules WHERE id = ?", (rule_id,)).fetchone()
+    if not row:
+        raise HTTPException(404, "rule not found")
+
+    new_keyword = _normalise(keyword) if keyword is not None else row["keyword"]
+    if not new_keyword:
+        raise HTTPException(400, "关键字不能为空")
+    if len(new_keyword) > 40:
+        raise HTTPException(400, "关键字最长 40 个字")
+
+    new_category = category if category is not None else row["category"]
+    if new_category not in EXPENSE_CATEGORIES:
+        raise HTTPException(400, f"未知分类：{new_category}")
+
+    if new_keyword != row["keyword"]:
+        clash = conn.execute(
+            "SELECT id FROM merchant_rules WHERE keyword = ? AND id != ?",
+            (new_keyword, rule_id)).fetchone()
+        if clash:
+            raise HTTPException(400, f"已经有一条「{new_keyword}」的规则了，先删掉那条再改")
+
+    # 改过的内置规则算「学来的」：它已经不是出厂那条了，
+    # 标成内置会让人以为可以放心删掉重置。
+    source = "learned" if row["source"] == "seed" else row["source"]
+    conn.execute(
+        """UPDATE merchant_rules
+           SET keyword = ?, category = ?, source = ?, updated_at = ?
+           WHERE id = ?""",
+        (new_keyword, new_category, source, datetime.now().isoformat(), rule_id),
+    )
+    return dict(conn.execute(
+        "SELECT * FROM merchant_rules WHERE id = ?", (rule_id,)).fetchone())
+
+
 def delete_rule(conn, rule_id: int) -> int:
     if not conn.execute("SELECT 1 FROM merchant_rules WHERE id = ?", (rule_id,)).fetchone():
         raise HTTPException(404, "rule not found")

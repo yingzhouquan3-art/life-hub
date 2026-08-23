@@ -142,6 +142,90 @@ class ConfirmFlowTests(unittest.TestCase):
                 conn.execute("SELECT COUNT(*) FROM transactions").fetchone()[0], 0)
 
 
+class RuleEditingTests(unittest.TestCase):
+    """改一条已有规则。
+
+    改分类靠「同名再添加一次」也能做到（那边是 upsert），但**关键字本身改不了**——
+    写错一个字只能删了重建，而重建会把命中次数清零，也丢掉这条规则从什么时候
+    开始生效。规则是用户自己积累的东西，改错一个字不该要求他重来。
+    """
+
+    def setUp(self):
+        self.original_db_path = db_core.current_path()
+        self.temp_dir = tempfile.TemporaryDirectory()
+        db_core.use_database(Path(self.temp_dir.name) / "ledger.db")
+        main.init_db()
+        self.star = next(r for r in categorize_api.categorize_state()["rules"]
+                         if r["keyword"] == "星巴克")
+
+    def tearDown(self):
+        db_core.use_database(self.original_db_path)
+        self.temp_dir.cleanup()
+
+    def patch(self, rule_id=None, **fields):
+        return categorize_api.patch_rule(
+            rule_id or self.star["id"], categorize_api.RulePatchIn(**fields))
+
+    def test_the_keyword_itself_can_be_changed(self):
+        result = self.patch(keyword="星巴克咖啡")
+        self.assertEqual(result["rule"]["keyword"], "星巴克咖啡")
+        with main.db() as conn:
+            self.assertEqual(
+                categorize.suggest_category(conn, "星巴克咖啡 拿铁")["category"], "food")
+            self.assertIsNone(categorize.suggest_category(conn, "星巴克 拿铁"))
+
+    def test_the_category_can_be_changed_on_its_own(self):
+        result = self.patch(category="social")
+        self.assertEqual(result["rule"]["category"], "social")
+        self.assertEqual(result["rule"]["keyword"], "星巴克", "没改的字段不该被动")
+
+    def test_editing_keeps_the_hit_count(self):
+        """删了重建会把命中次数清零——那是这条规则用了多久的唯一凭据。"""
+        with main.db() as conn:
+            categorize.learn_category(conn, "星巴克", "food")   # 命中一次
+            before = conn.execute("SELECT hits FROM merchant_rules WHERE id = ?",
+                                  (self.star["id"],)).fetchone()["hits"]
+        self.patch(keyword="星巴克咖啡")
+        with main.db() as conn:
+            after = conn.execute("SELECT hits FROM merchant_rules WHERE id = ?",
+                                 (self.star["id"],)).fetchone()["hits"]
+        self.assertEqual(after, before)
+
+    def test_an_edited_seed_rule_is_no_longer_labelled_built_in(self):
+        """它已经不是出厂那条了。还标成内置会让人以为可以放心删掉重置。"""
+        result = self.patch(category="social")
+        self.assertEqual(result["rule"]["source"], "learned")
+
+    def test_renaming_onto_an_existing_keyword_is_refused_by_name(self):
+        """两条规则合成一条是用户可能并不想要的结果，所以不静默合并。"""
+        with self.assertRaises(HTTPException) as caught:
+            self.patch(keyword="瑞幸")
+        self.assertIn("瑞幸", caught.exception.detail)
+
+    def test_keeping_the_same_keyword_is_not_treated_as_a_clash(self):
+        result = self.patch(keyword="星巴克", category="social")
+        self.assertEqual(result["rule"]["keyword"], "星巴克")
+
+    def test_an_empty_keyword_is_refused(self):
+        with main.db() as conn:
+            with self.assertRaises(HTTPException):
+                categorize.update_rule(conn, self.star["id"], keyword="   ")
+
+    def test_an_unknown_category_is_refused(self):
+        with main.db() as conn:
+            with self.assertRaises(HTTPException):
+                categorize.update_rule(conn, self.star["id"], category="乱写的")
+
+    def test_editing_a_missing_rule_is_a_404(self):
+        with self.assertRaises(HTTPException) as caught:
+            self.patch(rule_id=999999, category="food")
+        self.assertEqual(caught.exception.status_code, 404)
+
+    def test_an_empty_patch_is_refused(self):
+        with self.assertRaises(HTTPException):
+            categorize_api.patch_rule(self.star["id"], categorize_api.RulePatchIn())
+
+
 class MerchantAtConfirmTests(unittest.TestCase):
     """通知原文里认不出商户时，学习链是断的。
 
