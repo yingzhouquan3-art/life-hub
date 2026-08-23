@@ -253,6 +253,29 @@ class FrontendWiringTests(unittest.TestCase):
         self.assertIn("kbd-hint", html)
         self.assertIn("<kbd>N</kbd>", html)
 
+    def test_a_write_can_be_undone_right_after_it_happens(self):
+        """一句话记录靠猜决定落到哪个模块，猜错是常事——「午饭 16.5」会被
+        判成饮食而不是账本。没有撤销的话，纠正一次要自己翻到那个模块去找。"""
+        root = Path(__file__).resolve().parents[1] / "frontend"
+        js = (root / "app.js").read_text(encoding="utf-8")
+        html = (root / "index.html").read_text(encoding="utf-8")
+        self.assertIn('id="toast-tray"', html)
+        self.assertIn("showWriteToast", js)
+        # 撤销地址来自后端响应，前端不该自己拼每个模块的删除路径
+        self.assertIn("undo.path", js)
+
+    def test_confirming_a_quick_entry_needs_no_mouse(self):
+        """记一笔是每天做得最多的动作。之前它是「打字 → 回车 → 伸手点确认」，
+        每笔都要往鼠标跑一趟。解析完把焦点落到确认按钮上就够了。"""
+        root = Path(__file__).resolve().parents[1] / "frontend"
+        js = (root / "app.js").read_text(encoding="utf-8")
+        self.assertIn("focusAfterQuickParse", js)
+        start = js.index("function focusAfterQuickParse")
+        body = js[start:start + 700]
+        self.assertIn("btnQuickConfirm.focus()", body)
+        # 金额没解析出来时该去补金额，而不是急着确认
+        self.assertIn("quickAmount.focus()", body)
+
     def test_panels_with_a_backend_are_actually_rendered(self):
         """有接口没入口是这个项目的老毛病，补一条就在这里记一条。"""
         root = Path(__file__).resolve().parents[1] / "frontend"

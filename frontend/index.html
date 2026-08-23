@@ -9,12 +9,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=20260822-xlsx-2">
+  <link rel="stylesheet" href="./style.css?v=20260822-ux-4">
 </head>
 <body>
 
   <!-- 背景星空层 -->
   <canvas id="starfield" aria-hidden="true"></canvas>
+
+  <div class="toast-tray" id="toast-tray" role="status" aria-live="polite"></div>
 
   <nav class="platform-rail" aria-label="生活平台模块">
     <button class="platform-rail__brand" data-module-target="overview" aria-label="我的生活中枢" title="我的生活中枢">
@@ -409,7 +411,7 @@
               </div>
               <div class="quick-dynamic" id="quick-dynamic" hidden></div>
               <div class="quick-warnings" id="quick-warnings"></div>
-              <div class="quick-preview__actions"><button id="btn-quick-cancel">取消</button><button id="btn-quick-confirm">确认入账</button></div>
+              <div class="quick-preview__actions"><button id="btn-quick-cancel">取消</button><button id="btn-quick-confirm">确认入账</button><span class="kbd-hint"><kbd>回车</kbd>确认 · <kbd>Esc</kbd>取消</span></div>
             </div>
           </section>
           <section class="dashboard-panel capture-panel">
@@ -1321,6 +1323,6 @@
   </div>
 
   <script src="./grid.js"></script>
-  <script src="./app.js?v=20260822-xlsx-2"></script>
+  <script src="./app.js?v=20260822-ux-4"></script>
 </body>
 </html>

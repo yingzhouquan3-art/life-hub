@@ -116,6 +116,33 @@ _COMMITTERS = {
     "rhythm": _commit_rhythm,
 }
 
+# 写完之后怎么撤销这一条：结果里哪个键装着记录，以及删它的地址。
+#
+# 一句话记录靠猜来决定落到哪个模块，猜错是常事（「午饭 16.5」会被判成
+# 饮食而不是账本）。没有撤销的话，纠正一次要自己翻到那个模块去找那条记录。
+# 让后端顺手把「怎么撤销」告诉前端，前端就不用认识每个模块的删除地址——
+# 以后加模块也只需要在这里补一行。
+_UNDO_ROUTES = {
+    "finance": ("transaction", "/api/transactions/{id}"),
+    "fitness": ("session", "/api/fitness/sessions/{id}"),
+    "nutrition": ("entry", "/api/nutrition/entries/{id}"),
+    "recovery": ("checkin", "/api/recovery/checkins/{id}"),
+    "study": ("session", "/api/study/sessions/{id}"),
+    "rhythm": ("task", "/api/tasks/{id}"),
+}
+
+
+def _undo_for(module: str, result: dict) -> dict | None:
+    """从写入结果里取出「撤销这一条」需要的信息。取不到就不给，不编。"""
+    route = _UNDO_ROUTES.get(module)
+    if not route:
+        return None
+    key, template = route
+    record = result.get(key)
+    if not isinstance(record, dict) or "id" not in record:
+        return None
+    return {"path": template.format(id=record["id"]), "label": MODULE_LABELS.get(module, module)}
+
 
 @router.get("/api/quick/modules")
 def quick_modules():
@@ -146,4 +173,9 @@ def commit_quick(body: QuickCommitIn):
             raise HTTPException(400, f"预览缺少字段：{exc.args[0]}") from exc
         except (TypeError, ValueError) as exc:
             raise HTTPException(400, f"预览内容无法写入：{exc}") from exc
-        return {"module": body.module, **result, "life": get_life_overview(conn)}
+        return {
+            "module": body.module,
+            **result,
+            "undo": _undo_for(body.module, result),
+            "life": get_life_overview(conn),
+        }

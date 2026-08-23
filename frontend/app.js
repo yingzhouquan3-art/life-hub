@@ -664,6 +664,7 @@
     btnQuickParse: $('#btn-quick-parse'),
     quickEntryStatus: $('#quick-entry-status'),
     quickPreview: $('#quick-preview'),
+    toastTray: $('#toast-tray'),
     quickConfidence: $('#quick-confidence'),
     quickType: $('#quick-type'),
     quickAmount: $('#quick-amount'),
@@ -2243,6 +2244,65 @@
       state.busy = false;
       els.btnDemoRemove.disabled = false;
     }
+  }
+
+  // ---------- 提示条 ----------
+  //
+  // 写完一条之后什么都不说，预览直接消失，用户得自己去别处找数字有没有变。
+  // 更要紧的是一句话记录靠猜决定落到哪个模块，猜错是常事——「午饭 16.5」
+  // 会被判成饮食而不是账本。没有撤销的话，纠正一次要自己翻到那个模块去找。
+  //
+  // 所以提示条不只是「记好了」，它带着撤销。撤销的地址由后端在写入响应里
+  // 给出，前端不需要认识每个模块的删除接口。
+  const TOAST_MS = 7000;
+
+  function showToast(text, { action, onAction, tone } = {}) {
+    if (!els.toastTray) return;
+    const toast = document.createElement('div');
+    toast.className = 'toast' + (tone ? ` toast--${tone}` : '');
+    toast.innerHTML = `<span class="toast__text">${escapeHtml(text)}</span>`;
+    let timer = null;
+    const dismiss = () => {
+      if (timer) clearTimeout(timer);
+      toast.classList.add('is-leaving');
+      setTimeout(() => toast.remove(), 200);
+    };
+    if (action && onAction) {
+      const button = document.createElement('button');
+      button.className = 'toast__action';
+      button.textContent = action;
+      button.addEventListener('click', async () => {
+        button.disabled = true;
+        try {
+          await onAction();
+          dismiss();
+        } catch (error) {
+          toast.querySelector('.toast__text').textContent = cleanError(error, '撤销失败');
+          toast.classList.add('toast--warn');
+          button.remove();
+        }
+      });
+      toast.appendChild(button);
+    }
+    // 同时只留一条，免得连记几笔之后屏幕下方堆一摞
+    [...els.toastTray.children].forEach(node => node.remove());
+    els.toastTray.appendChild(toast);
+    timer = setTimeout(dismiss, TOAST_MS);
+    return dismiss;
+  }
+
+  /** 刚写完的那一条，给一次后悔的机会。 */
+  function showWriteToast(text, undo) {
+    if (!undo?.path) { showToast(text); return; }
+    showToast(text, {
+      action: '撤销',
+      onAction: async () => {
+        const response = await fetch(undo.path, { method: 'DELETE' });
+        if (!response.ok) throw new Error(`${response.status} ${await response.text()}`);
+        await loadAndPaint();
+        showToast('已撤销，那条记录没有留下。');
+      },
+    });
   }
 
   function renderToday() {
@@ -4918,6 +4978,26 @@
     renderQuickModules();
   }
 
+  /** 解析完之后，把焦点放到「下一步该动的地方」。
+   *
+   *  记一笔是每天做得最多的动作，之前它是「打字 → 回车解析 → 伸手去点确认」，
+   *  每笔都要往鼠标跑一趟。把焦点落到确认按钮上，回车就是浏览器自带的
+   *  「按下这个按钮」，一行自定义按键处理都不用写。
+   *
+   *  但金额没解析出来时不该急着确认——那才是真正要补的地方，
+   *  所以这种情况把焦点给金额框。
+   */
+  function focusAfterQuickParse() {
+    const preview = state.quickPreview;
+    if (!preview) return;
+    if (preview.module === 'finance' && !(parseFloat(els.quickAmount.value) > 0)) {
+      els.quickAmount.focus();
+      els.quickAmount.select();
+      return;
+    }
+    els.btnQuickConfirm.focus();
+  }
+
   async function parseQuickEntry() {
     if (state.busy) return;
     const text = els.quickEntryInput.value.trim();
@@ -4944,6 +5024,7 @@
       // 首次解析和改判走同一条渲染路径，避免两处逻辑日后走偏
       applyQuickModule(parsed.module, state.quickPreview.payload);
       els.quickPreview.hidden = false;
+      focusAfterQuickParse();
     } catch (error) {
       els.quickEntryStatus.textContent = String(error.message || '暂时无法解析这句话').replace(/^\d+\s*/, '');
       els.quickEntryStatus.hidden = false;
@@ -5038,6 +5119,13 @@
   els.quickEntryInput.addEventListener('keydown', event => {
     if (event.key === 'Enter') { event.preventDefault(); parseQuickEntry(); }
   });
+  // 预览开着的时候 Esc 收起来，手不用离开键盘
+  els.quickPreview.addEventListener('keydown', event => {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    clearQuickPreview();
+    els.quickEntryInput.focus();
+  });
   els.quickType.addEventListener('change', syncQuickPreviewType);
   els.btnQuickCancel.addEventListener('click', clearQuickPreview);
   els.btnQuickConfirm.addEventListener('click', async () => {
@@ -5063,6 +5151,11 @@
           note: els.quickNote.value.trim(),
           occurred_on: els.quickDate.value || todayISO(),
         });
+        // 备注为空时退回原句，但那句里通常已经带着金额了，
+        // 再缀一次「¥28」就成了「打车 28 支付宝 ¥28」。
+        const parsedNote = els.quickNote.value.trim();
+        const noteText = parsedNote || preview.input;
+        const amountSuffix = parsedNote ? ` ${fmtCNY(amount)}` : '';
         clearQuickPreview();
         els.quickEntryInput.value = '';
         await loadAndPaint();
@@ -5070,6 +5163,11 @@
         await playAnimation(res);
         grid.setData(state.stats);
         renderProgress();
+        // 动画放完再提示，否则提示条会和点亮方格的仪式撞在一起
+        showWriteToast(
+          `已记入账本：${noteText}${amountSuffix}`,
+          res.transaction?.id ? { path: `/api/transactions/${res.transaction.id}` } : null);
+        els.quickEntryInput.focus();
       } catch (error) {
         els.quickEntryStatus.textContent = String(error.message || '入账失败，当前账本没有改变').replace(/^\d+\s*/, '');
         els.quickEntryStatus.hidden = false;
@@ -5084,10 +5182,13 @@
     els.btnQuickConfirm.disabled = true;
     els.quickEntryStatus.hidden = true;
     try {
-      await api.quickCommit({ module: preview.module, payload: preview.payload });
+      const written = await api.quickCommit({ module: preview.module, payload: preview.payload });
+      const label = QUICK_MODULE_LABELS[preview.module] || preview.module;
       clearQuickPreview();
       els.quickEntryInput.value = '';
       await loadAndPaint();
+      showWriteToast(`已记入${label}：${preview.input}`, written.undo);
+      els.quickEntryInput.focus();
     } catch (error) {
       els.quickEntryStatus.textContent = String(error.message || '写入失败，没有留下任何记录').replace(/^\d+\s*/, '');
       els.quickEntryStatus.hidden = false;
@@ -5147,9 +5248,44 @@
     }
   }
 
+  /** 删掉一笔之后给一次后悔的机会。
+   *
+   *  撤销是「照着原样重记一笔」，不是把原来那条捞回来——数据回来了，
+   *  但它是一条新记录：id 变了，如果原来属于某批导入，那层关系也断了。
+   *  这一点在提示里如实说明，不能让人以为删除被完全还原了。
+   */
+  function showDeleteToast(removed) {
+    const label = removed.note || (removed.type === 'income' ? '收入' : '支出');
+    const fromImport = removed.import_batch_id != null;
+    showToast(
+      `已删除：${label} ${fmtCNY(removed.amount)}` +
+      (fromImport ? '（撤销后会成为新的一笔，不再属于原来那批导入）' : ''),
+      {
+        action: '撤销',
+        onAction: async () => {
+          await api.addTx({
+            type: removed.type,
+            source: removed.type === 'income' ? removed.source : null,
+            category: removed.type === 'expense' ? removed.category : null,
+            account_id: removed.account_id,
+            amount: removed.amount,
+            note: removed.note || '',
+            occurred_on: removed.occurred_on,
+          });
+          await loadAndPaint();
+          showToast('已恢复那一笔。');
+        },
+      });
+  }
+
   async function onDelete(id) {
     if (state.busy) return;
     audio.ensure();
+    // 删之前把这一笔留一份，撤销时照着重建。
+    // 这里刻意不加确认框：删除在这个列表上是高频动作，每次都弹一次确认
+    // 只会让人养成闭眼点「是」的习惯，那反而更危险。给一次后悔的机会
+    // 比拦一道门有用——快的照样快，手滑的能救回来。
+    const removed = state.transactions.find(item => item.id === id);
     state.busy = true;
     try {
       const res = await api.delTx(id);
@@ -5165,8 +5301,10 @@
       await playAnimation(res);
       grid.setData(state.stats);
       renderProgress();
+      if (removed) showDeleteToast(removed);
     } catch (e) {
       console.error(e);
+      showToast(cleanError(e, '删除失败'), { tone: 'warn' });
     } finally {
       state.busy = false;
     }

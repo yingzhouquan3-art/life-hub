@@ -2169,6 +2169,37 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
 .rules-panel { grid-column: 1 / -1; }
 .ingest-panel { grid-column: 1 / -1; }
 .demo-panel { grid-column: 1 / -1; }
+
+/* 写入之后的提示条。之前写完什么都不说，预览直接消失，
+   用户得自己去别处找数字有没有变。 */
+.toast-tray {
+  position: fixed; z-index: 120; left: 50%; bottom: 26px; transform: translateX(-50%);
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  display: flex; align-items: center; gap: 12px;
+  max-width: min(520px, 92vw); padding: 10px 14px;
+  border: 1px solid var(--line-1); border-radius: 999px;
+  background: rgba(14,14,22,.94); backdrop-filter: blur(18px);
+  box-shadow: 0 12px 40px rgba(0,0,0,.35);
+  color: var(--text-1); font-size: 12px;
+  pointer-events: auto;
+  animation: toast-in .18s var(--ease-out);
+}
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.toast.is-leaving { opacity: 0; transform: translateY(6px); transition: opacity .18s, transform .18s; }
+.toast__text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.toast__action {
+  flex: 0 0 auto; padding: 4px 11px; border-radius: 999px;
+  color: #9cc3ff; background: rgba(156,195,255,.1); font-size: 11px;
+}
+.toast__action:hover { background: rgba(156,195,255,.2); }
+.toast--warn .toast__text { color: var(--gold-bloom); }
+@media (prefers-reduced-motion: reduce) {
+  .toast { animation: none; }
+  .toast.is-leaving { transition: none; }
+}
 .kbd-hint { color: var(--text-4); font-size: 9.5px; white-space: nowrap; }
 .kbd-hint kbd {
   display: inline-block; min-width: 15px; padding: 1px 4px; margin: 0 1px;
@@ -2177,6 +2208,13 @@ input[type=number]::-webkit-outer-spin-button, input[type=number]::-webkit-inner
   font: inherit; font-size: 9px; text-align: center;
 }
 .quick-entry-panel header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.quick-preview__actions { display: flex; align-items: center; gap: 8px; }
+.quick-preview__actions .kbd-hint { margin-left: auto; }
+/* 焦点落在确认按钮上时要看得出来，否则用户不知道回车会按到哪 */
+#btn-quick-confirm:focus-visible, .tx-edit__actions button:focus-visible,
+.ingest-actions button:focus-visible, .demo-actions button:focus-visible {
+  outline: 2px solid var(--gold-core); outline-offset: 2px;
+}
 .demo-status { color: var(--text-3); font-size: 11px; white-space: nowrap; }
 .demo-actions { display: flex; gap: 7px; margin-bottom: 8px; }
 .demo-actions button {
