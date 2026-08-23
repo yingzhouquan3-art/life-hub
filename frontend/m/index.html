@@ -67,9 +67,18 @@
   .group { margin-bottom: 12px; }
   .group:last-child { margin-bottom: 0; }
   .group h3 { margin: 0 0 7px; font-size: 12px; color: var(--muted); font-weight: 600; }
-  .banner { padding: 10px 14px; font-size: 13px; text-align: center; }
+  .banner { padding: 10px 14px; font-size: 13px; text-align: center;
+            display: flex; align-items: center; justify-content: center; gap: 4px; }
+  .banner.hidden { display: none; }
   .banner.offline { background: #3a2a12; color: var(--warn); }
   .banner.ok { background: #14301f; color: var(--ok); }
+  .banner__action {
+    /* 手机上的点击目标：和打卡行一样按 44px 起，站着单手也点得中 */
+    width: auto; min-height: 40px; margin: 0 0 0 10px; padding: 0 18px;
+    border-radius: 999px; background: rgba(255,255,255,.16); color: inherit;
+    font: 600 14px/1 inherit; vertical-align: middle;
+  }
+  .banner__action:disabled { opacity: .5; }
   .hidden { display: none !important; }
 </style>
 </head>
@@ -123,6 +132,6 @@
   </section>
 </main>
 
-<script src="./app.js"></script>
+<script src="./app.js?v=20260822-ux-2"></script>
 </body>
 </html>

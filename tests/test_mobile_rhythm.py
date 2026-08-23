@@ -6,6 +6,7 @@
 所以这组测试守的是一条：**补发一条迟到的操作，不能把已经做好的事撤销掉。**
 做法是让手机端发「设成这样」而不是「切换一下」。
 """
+import re
 import tempfile
 import unittest
 from datetime import date, timedelta
@@ -134,6 +135,40 @@ class MobileShellTests(unittest.TestCase):
     def test_the_card_has_both_markup_and_a_renderer(self):
         self.assertIn('id="rhythmList"', self.html)
         self.assertIn("loadRhythm()", self.js)
+
+    def test_the_service_worker_can_deliver_updates(self):
+        """纯 cache-first 加一个永不变的缓存名，等于**手机缓存过一次外壳就
+        永远运行那个版本**：缓存名不变所以 activate 里的清理不触发，
+        命中缓存就不查网络，之后所有修复都到不了用户手上。
+
+        改成 stale-while-revalidate：先给缓存让页面立刻能开，同时后台取新的。
+        """
+        sw = (self.root / "sw.js").read_text(encoding="utf-8")
+        self.assertNotIn("hit || fetch(event.request)", sw, "这是纯 cache-first，更新永远送不到")
+        self.assertIn("cache.put", sw, "必须在后台把新的存回缓存")
+        self.assertIn("caches.open", sw)
+
+    def test_the_mobile_script_is_cache_busted(self):
+        """走 http 访问时没有 Service Worker，全靠浏览器缓存。
+        脚本地址不带版本号的话，更新一样可能永远到不了手机上。"""
+        self.assertRegex(self.html, r'app\.js\?v=[0-9a-z-]+', "手机端脚本缺少版本号")
+
+    def test_a_success_banner_is_not_wiped_by_the_next_refresh(self):
+        """doCommit 是「showBanner('已记下') → refresh() → renderConnection()」，
+        而 renderConnection 以前在联网时无条件隐藏横幅——那句确认刚显示就被
+        自己人抹掉了，手机上从来没人看见过。"""
+        self.assertIn("dataset.purpose", self.js)
+        # 去掉注释再判：`} else {` 和 add('hidden') 之间可能隔着好几行说明，
+        # 只按原文匹配的话，把 bug 放回去测试也照样绿——我实测过。
+        bare = re.sub(r"//.*", "", self.js)
+        self.assertNotRegex(
+            bare, r"\}\s*else\s*\{\s*\$\('banner'\)\.classList\.add\('hidden'\)",
+            "联网时无条件隐藏横幅，会把刚写完的「已记下」一起抹掉")
+
+    def test_a_mobile_write_can_be_undone(self):
+        """手机端改不了已有记录，猜错模块之后没有撤销就得回到电脑前。"""
+        self.assertIn("banner__action", self.js)
+        self.assertIn("undo.path", self.js)
 
     def test_offline_queue_never_sends_a_bare_toggle(self):
         """队列里排的必须是「设成这样」。这条是这次改动的全部理由。"""

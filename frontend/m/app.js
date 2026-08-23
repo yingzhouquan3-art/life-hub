@@ -82,11 +82,38 @@ async function flushQueue() {
 // ---------- 界面 ----------
 const $ = (id) => document.getElementById(id);
 
-function showBanner(text, kind) {
+/** 顶部横幅。带 action 时挂一个可点的按钮，用来撤销刚写的那一条。
+ *
+ *  一句话记录靠猜决定落到哪个模块，猜错是常事。手机端又改不了已有记录，
+ *  没有撤销的话，纠正一次得回到电脑前。所以这里比桌面更需要它。
+ */
+let bannerTimer = null;
+
+function showBanner(text, kind, action, purpose) {
   const banner = $('banner');
+  if (bannerTimer) { clearTimeout(bannerTimer); bannerTimer = null; }
   banner.textContent = text;
   banner.className = 'banner ' + (kind || '');
-  if (kind === 'ok') setTimeout(() => banner.classList.add('hidden'), 2600);
+  // 标记这条横幅是干什么的。联网状态变化时只收走属于它自己的那条，
+  // 不能把刚写完的「已记下」一起抹掉——见 renderConnection。
+  banner.dataset.purpose = purpose || 'message';
+  if (action && action.onClick) {
+    const button = document.createElement('button');
+    button.className = 'banner__action';
+    button.textContent = action.label;
+    button.onclick = async () => {
+      button.disabled = true;
+      try {
+        await action.onClick();
+      } catch (error) {
+        showBanner(error.message, 'offline');
+      }
+    };
+    banner.appendChild(button);
+  }
+  // 带撤销的横幅留久一点：手机上看清一句话再决定要不要撤，得有时间
+  const linger = action ? 9000 : 2600;
+  if (kind === 'ok') bannerTimer = setTimeout(() => banner.classList.add('hidden'), linger);
 }
 
 /* http 访问时浏览器不把这个来源当成安全上下文，
@@ -102,8 +129,12 @@ function renderConnection() {
   $('connInfo').textContent = parts.join(' · ');
   renderInstallHint();
   if (!navigator.onLine) {
-    showBanner(queued ? `离线中，${queued} 条记录已暂存` : '离线中，记录会先存在手机上', 'offline');
-  } else {
+    showBanner(queued ? `离线中，${queued} 条记录已暂存` : '离线中，记录会先存在手机上',
+               'offline', null, 'connection');
+  } else if ($('banner').dataset.purpose === 'connection') {
+    // 只收走「离线中」那条。以前这里无条件隐藏，而 doCommit 是
+    // 「showBanner('已记下') → refresh() → renderConnection()」，
+    // 于是那句确认刚显示就被自己人抹掉了，手机上从来没人看见过。
     $('banner').classList.add('hidden');
   }
 }
@@ -211,8 +242,17 @@ async function doCommit() {
   }
   $('commitBtn').disabled = true;
   try {
-    await api('/api/quick/commit', { method: 'POST', body: JSON.stringify(payload) });
-    showBanner('已记下', 'ok');
+    const written = await api('/api/quick/commit', { method: 'POST', body: JSON.stringify(payload) });
+    const undo = written && written.undo;
+    showBanner('已记下' + (undo ? '（' + undo.label + '）' : ''), 'ok',
+      undo && undo.path ? {
+        label: '撤销',
+        onClick: async () => {
+          await api(undo.path, { method: 'DELETE' });
+          showBanner('已撤销，那条没有留下', 'ok');
+          refresh();
+        },
+      } : null);
     resetForm();
     refresh();
   } catch (error) {
