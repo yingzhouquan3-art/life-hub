@@ -308,6 +308,27 @@ class FrontendWiringTests(unittest.TestCase):
         js = (root / "app.js").read_text(encoding="utf-8")
         self.assertNotIn("认不出而跳过", js)
 
+    def test_planning_holds_only_planning(self):
+        """导入和备份原本混在「规划中心」里，而统一导入口在「数据中心」——
+        同一件事在两个页面各有入口，用户不知道该用哪个。"""
+        root = Path(__file__).resolve().parents[1] / "frontend"
+        html = (root / "index.html").read_text(encoding="utf-8")
+        start = html.index('data-stage-view="planning"')
+        end = html.index('stage-view', start + 40)
+        planning = html[start:end]
+        for stray in ("CSV 账单导入", "本地备份", "账单对账"):
+            self.assertNotIn(stray, planning, f"「{stray}」不属于规划中心")
+
+    def test_the_superseded_statement_panel_is_gone(self):
+        """旧的「微信/支付宝账单对账」已被统一导入口完全覆盖——
+        后者还能读 Excel、猜分类、逐行列出没写进去的行。留着两个只会让人犹豫。"""
+        root = Path(__file__).resolve().parents[1] / "frontend"
+        html = (root / "index.html").read_text(encoding="utf-8")
+        js = (root / "app.js").read_text(encoding="utf-8")
+        self.assertNotIn('id="btn-analyze-statement"', html)
+        self.assertNotIn("btnAnalyzeStatement", js, "面板删了，JS 也不能留着引用它")
+        self.assertNotIn("renderStatementPreview", js)
+
     def test_panels_with_a_backend_are_actually_rendered(self):
         """有接口没入口是这个项目的老毛病，补一条就在这里记一条。"""
         root = Path(__file__).resolve().parents[1] / "frontend"

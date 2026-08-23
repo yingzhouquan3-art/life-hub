@@ -9,7 +9,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=JetBrains+Mono:wght@300;400;500;600&family=Noto+Sans+SC:wght@300;400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="./style.css?v=20260823-ux-9">
+  <link rel="stylesheet" href="./style.css?v=20260823-ux-11">
 </head>
 <body>
 
@@ -608,63 +608,6 @@
             <p class="plan-status" id="budget-status" hidden></p>
           </section>
 
-          <section class="dashboard-panel import-panel">
-            <header><div><h2>CSV 账单导入</h2><p>先预览校验，确认后才写入账本</p></div><button class="template-button" id="btn-download-template">下载空白模板</button></header>
-            <div class="import-controls">
-              <label class="import-file-label"><span>选择 UTF-8 / GB18030 CSV</span><input id="import-file" type="file" accept=".csv,text/csv"></label>
-              <label><span>未填写账户时记入</span><select id="import-account" aria-label="导入默认账户"></select></label>
-              <button id="btn-analyze-import">分析并预览</button>
-            </div>
-            <div class="import-summary" id="import-summary" hidden></div>
-            <div class="import-preview" id="import-preview"></div>
-            <button class="import-commit" id="btn-commit-import" disabled>确认导入 0 笔</button>
-            <p class="plan-status plan-status--error" id="import-error" hidden></p>
-            <p class="import-note">支持表头：日期/date、类型/type、金额/amount、分类/category、来源/source、备注/note、账户/account。收入缺少来源时保守归为家庭生活费。</p>
-            <div class="import-history" id="import-history"></div>
-          </section>
-
-          <section class="dashboard-panel backup-panel">
-            <header>
-              <div>
-                <h2>本地备份</h2>
-                <p>每次启动自动留一份快照，出事时可以退回去</p>
-              </div>
-              <button class="template-button" id="btn-take-snapshot">立刻备份一份</button>
-            </header>
-            <div class="backup-status" id="backup-status">读取中…</div>
-            <div class="backup-list" id="backup-list"></div>
-            <p class="import-note" id="backup-note"></p>
-          </section>
-
-          <section class="dashboard-panel statement-panel">
-            <header>
-              <div>
-                <h2>微信 / 支付宝账单对账</h2>
-                <p>和已有交易比对，只补没记过的那些，不重复入账</p>
-              </div>
-            </header>
-            <div class="import-controls">
-              <label class="import-file-label">
-                <span>选择导出的账单 CSV</span>
-                <input id="statement-file" type="file" accept=".csv,text/csv">
-              </label>
-              <select id="statement-source" aria-label="账单来源">
-                <option value="">自动识别来源</option>
-                <option value="wechat">微信支付账单</option>
-                <option value="alipay">支付宝账单</option>
-              </select>
-              <button id="btn-analyze-statement">解析并对账</button>
-            </div>
-            <div class="statement-summary" id="statement-summary" hidden></div>
-            <div class="statement-preview" id="statement-preview"></div>
-            <button class="import-commit" id="btn-commit-statement" disabled>确认写入 0 笔</button>
-            <p class="plan-status plan-status--error" id="statement-error" hidden></p>
-            <p class="import-note">
-              账单是权威事实，捕获和手记只是让你早点看到。对不上只表示账本里没有匹配的记录，
-              不代表这笔钱一定没记（比如日期填错了一天），所以要你确认后才写入。
-              退款、已关闭、支付失败的行不是实际支出，会被跳过。
-            </p>
-          </section>
         </div>
       </div>
 
@@ -770,6 +713,34 @@
               和已有记录对得上的行不会重复写入。支出分类是按关键字猜的，可以在下面逐行改，
               <b>导入不会把这些猜测变成新规则</b>——规则只在你逐条确认捕获时才学。
             </p>
+          </section>
+
+          <section class="dashboard-panel backup-panel">
+            <header>
+              <div>
+                <h2>本地备份</h2>
+                <p>每次启动自动留一份快照，出事时可以退回去</p>
+              </div>
+              <button class="template-button" id="btn-take-snapshot">立刻备份一份</button>
+            </header>
+            <div class="backup-status" id="backup-status">读取中…</div>
+            <div class="backup-list" id="backup-list"></div>
+            <p class="import-note" id="backup-note"></p>
+          </section>
+
+          <section class="dashboard-panel import-panel">
+            <header><div><h2>CSV 账单导入（旧入口）</h2><p>上面的「导入」已经能读这种模板，还能读 Excel。这里保留是因为下载空白模板和整批撤销在这</p></div><button class="template-button" id="btn-download-template">下载空白模板</button></header>
+            <div class="import-controls">
+              <label class="import-file-label"><span>选择 UTF-8 / GB18030 CSV</span><input id="import-file" type="file" accept=".csv,text/csv"></label>
+              <label><span>未填写账户时记入</span><select id="import-account" aria-label="导入默认账户"></select></label>
+              <button id="btn-analyze-import">分析并预览</button>
+            </div>
+            <div class="import-summary" id="import-summary" hidden></div>
+            <div class="import-preview" id="import-preview"></div>
+            <button class="import-commit" id="btn-commit-import" disabled>确认导入 0 笔</button>
+            <p class="plan-status plan-status--error" id="import-error" hidden></p>
+            <p class="import-note">支持表头：日期/date、类型/type、金额/amount、分类/category、来源/source、备注/note、账户/account。收入缺少来源时保守归为家庭生活费。</p>
+            <div class="import-history" id="import-history"></div>
           </section>
           <section class="dashboard-panel annual-report-panel">
             <header><div><h2>年度报告</h2><p>按真实账目汇总，不含规划中的预计收入</p></div><div class="annual-actions"><input id="annual-year" type="number" min="1900" max="2200" aria-label="报告年份"><button id="btn-load-annual">生成</button><button id="btn-export-annual">导出 CSV</button></div></header>
@@ -1324,6 +1295,6 @@
   </div>
 
   <script src="./grid.js"></script>
-  <script src="./app.js?v=20260823-ux-9"></script>
+  <script src="./app.js?v=20260823-ux-11"></script>
 </body>
 </html>

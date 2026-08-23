@@ -156,7 +156,6 @@
       if (!response.ok) throw new Error(`${response.status} ${await response.text()}`);
       return response.json();
     },
-    previewStatement: (body) => post(`${API}/statements/preview`, body),
     focusState: () => fetch(`${API}/study/focus`).then(r => r.json()),
     startFocus: (body) => post(`${API}/study/focus`, body),
     finishFocus: (id, body) => post(`${API}/study/focus/${id}/finish`, body),
@@ -276,7 +275,6 @@
     transfers: [],
     planning: { settings: {}, goals: [], forecast: {} },
     importPreview: null,
-    statementPreview: null,
     importBatches: [],
     calendar: { bills: [], summary: {}, review: {} },
     today: {},
@@ -757,13 +755,6 @@
     importSummary: $('#import-summary'),
     importPreview: $('#import-preview'),
     btnCommitImport: $('#btn-commit-import'),
-    statementFile: $('#statement-file'),
-    statementSource: $('#statement-source'),
-    btnAnalyzeStatement: $('#btn-analyze-statement'),
-    statementSummary: $('#statement-summary'),
-    statementPreview: $('#statement-preview'),
-    btnCommitStatement: $('#btn-commit-statement'),
-    statementError: $('#statement-error'),
     importError: $('#import-error'),
     importHistory: $('#import-history'),
 
@@ -2012,12 +2003,17 @@
     const shown = rows.slice(0, INGEST_MAX_ROWS);
     const isLedger = preview.module === 'ledger';
     els.ingestRows.innerHTML = shown.map((row, index) => {
-      const right = isLedger
+      // 收入行不给支出分类下拉：选了也没用，后端对收入强制 category='income'。
+      // 显示一个点了不生效的控件，比不显示更让人困惑。
+      const isIncome = row.type === 'income';
+      const right = isLedger && !isIncome
         ? `<select data-ingest-category="${index}" aria-label="第 ${index + 1} 行的分类">${
             Object.entries(CATEGORY_LABELS).map(([key, label]) =>
               `<option value="${key}"${key === (row.category || 'other') ? ' selected' : ''}>${label}</option>`).join('')
           }</select>`
-        : `<span class="ingest-row__extra">${escapeHtml(describeIngestRow(preview.kind, row))}</span>`;
+        : `<span class="ingest-row__extra">${escapeHtml(isIncome
+            ? `收入 · ${SOURCE_LABELS[row.source] || '家庭生活费'}`
+            : describeIngestRow(preview.kind, row))}</span>`;
       return `<div class="ingest-row">
         <span class="ingest-row__date">${escapeHtml(row.occurred_on)}</span>
         <span class="ingest-row__note">${escapeHtml(row.note || describeIngestRow(preview.kind, row))}</span>
@@ -2655,66 +2651,6 @@
   // ---------- 微信 / 支付宝账单对账 ----------
   // 账单是权威事实，但「对不上」只表示账本里没有匹配的记录，
   // 不能推导这笔钱一定没记，所以一律要用户确认后才写入。
-  function renderStatementPreview() {
-    const preview = state.statementPreview;
-    if (!preview) {
-      els.statementSummary.hidden = true;
-      els.statementPreview.innerHTML = '';
-      els.btnCommitStatement.disabled = true;
-      els.btnCommitStatement.textContent = '确认写入 0 笔';
-      return;
-    }
-
-    const parsed = preview.summary || {};
-    const recon = preview.reconciliation?.summary || {};
-    els.statementSummary.hidden = false;
-    els.statementSummary.classList.remove('is-error');
-    els.statementSummary.innerHTML = `
-      <div class="statement-stats">
-        <span><em>${escapeHtml(preview.source_label || '')}</em>${parsed.date_from ? ` ${escapeHtml(parsed.date_from)} 至 ${escapeHtml(parsed.date_to)}` : ''}</span>
-        <span>解析 <strong>${fmtInt(parsed.parsed || 0)}</strong> 条</span>
-        <span>已经记过 <strong>${fmtInt(recon.matched || 0)}</strong> 条</span>
-        <span class="is-new">还没记 <strong>${fmtInt(recon.new || 0)}</strong> 条 · ${fmtCNY(recon.new_amount || 0)}</span>
-        ${parsed.review ? `<span class="is-review">需要你判断 <strong>${fmtInt(parsed.review)}</strong> 条</span>` : ''}
-        ${parsed.skipped ? `<span class="is-skip">跳过 <strong>${fmtInt(parsed.skipped)}</strong> 条</span>` : ''}
-      </div>`;
-
-    const rows = preview.reconciliation?.new || [];
-    const skipped = preview.skipped || [];
-    const parts = [];
-    if (rows.length) {
-      parts.push('<h4>将要写入</h4>' + rows.map(row => `
-        <div class="statement-row">
-          <span>${escapeHtml(row.occurred_on)}</span>
-          <span class="statement-row__note">${escapeHtml(row.note)}</span>
-          <em class="${row.type === 'income' ? 'is-income' : ''}">${row.type === 'income' ? '+' : '−'}${fmtCNY(row.amount)}</em>
-        </div>`).join(''));
-    } else {
-      parts.push('<div class="today-empty">这份账单里的每一条都已经在账本里了，没有需要补录的。</div>');
-    }
-    // 方向认不出来的行不会自动写入，但也不能让它们悄悄消失——
-    // 那正是「账目对不上却不知道少了哪几笔」的来源。
-    const review = preview.review || [];
-    if (review.length) {
-      parts.push('<h4>需要你判断（不会自动写入）</h4>' + review.map(row => `
-        <div class="statement-row statement-row--review">
-          <span>${escapeHtml(row.occurred_on)}</span>
-          <span class="statement-row__note">${escapeHtml(row.note)} — ${escapeHtml(row.reason)}</span>
-          <em>${fmtCNY(row.amount)}</em>
-        </div>`).join(''));
-    }
-    if (skipped.length) {
-      parts.push('<h4>已跳过</h4>' + skipped.map(item => `
-        <div class="statement-row statement-row--skip">
-          <span>第 ${fmtInt(item.line)} 行</span>
-          <span class="statement-row__note">${escapeHtml(item.reason)}</span>
-        </div>`).join(''));
-    }
-    els.statementPreview.innerHTML = parts.join('');
-
-    els.btnCommitStatement.disabled = rows.length === 0;
-    els.btnCommitStatement.textContent = `确认写入 ${fmtInt(rows.length)} 笔`;
-  }
 
   function renderImportPreview() {
     const preview = state.importPreview;
@@ -3502,7 +3438,6 @@
     renderDashboard();
     renderPlanning();
     renderImportPreview();
-    renderStatementPreview();
     renderImportHistory();
     renderMonthlyReview();
     renderDataCenter();
@@ -4485,56 +4420,6 @@
     }
   });
 
-  els.btnAnalyzeStatement.addEventListener('click', async () => {
-    const file = els.statementFile.files?.[0];
-    els.statementError.hidden = true;
-    if (!file) { els.statementFile.click(); return; }
-    els.btnAnalyzeStatement.disabled = true;
-    try {
-      const text = await readStatementFile(file);
-      state.statementPreview = await api.previewStatement({
-        content: text,
-        source: els.statementSource.value || null,
-        filename: file.name,
-      });
-      renderStatementPreview();
-    } catch (error) {
-      state.statementPreview = null;
-      renderStatementPreview();
-      els.statementError.textContent = String(error.message || '账单无法解析').replace(/^\d+\s*/, '');
-      els.statementError.hidden = false;
-    } finally {
-      els.btnAnalyzeStatement.disabled = false;
-    }
-  });
-
-  els.btnCommitStatement.addEventListener('click', async () => {
-    const preview = state.statementPreview;
-    if (state.busy || !preview?.import_payload?.rows?.length) return;
-    state.busy = true;
-    els.btnCommitStatement.disabled = true;
-    els.statementError.hidden = true;
-    try {
-      // 交给账本已有的安全导入：那里还有一层内容防重和整批撤销
-      const response = await api.importTransactions(preview.import_payload);
-      state.statementPreview = null;
-      els.statementFile.value = '';
-      await loadAndPaint();
-      els.statementSummary.hidden = false;
-      els.statementSummary.classList.remove('is-error');
-      els.statementSummary.textContent =
-        `已补录 ${response.imported_count || 0} 笔。重复的没有再记一遍，可以在上面的导入记录里整批撤销。`;
-    } catch (error) {
-      const duplicate = String(error.message || '').startsWith('409');
-      els.statementError.textContent = duplicate
-        ? '这批内容已经导入过，本次没有重复记账。'
-        : String(error.message || '写入失败').replace(/^\d+\s*/, '');
-      els.statementError.hidden = false;
-      els.btnCommitStatement.disabled = false;
-    } finally {
-      state.busy = false;
-    }
-  });
 
   els.btnCommitImport.addEventListener('click', async () => {
     const preview = state.importPreview;

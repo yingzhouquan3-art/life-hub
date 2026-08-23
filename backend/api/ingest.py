@@ -30,7 +30,8 @@ from backend.ingest import (
 
 router = APIRouter()
 
-KindLiteral = Literal["wechat_statement", "alipay_statement", "health_workout", "health_body"]
+KindLiteral = Literal["wechat_statement", "alipay_statement",
+                     "health_workout", "health_body", "ledger_template"]
 
 
 class IdentifyIn(BaseModel):
@@ -100,7 +101,7 @@ def ingest_preview(body: IngestPreviewIn):
 @router.post("/api/ingest/commit")
 def ingest_commit(body: IngestCommitIn):
     """写入预览里「还没记过」的那些行，转交给对应模块原本的导入接口。"""
-    if body.kind in ("wechat_statement", "alipay_statement"):
+    if body.kind in ("wechat_statement", "alipay_statement", "ledger_template"):
         payload = ledger_api.ImportBatchIn(
             filename=body.filename,
             rows=[

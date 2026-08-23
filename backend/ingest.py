@@ -34,6 +34,8 @@ from backend.spreadsheet import (
 )
 from backend.statements import build_preview as build_statement_preview
 from backend.statements import detect_source
+from backend.statements import reconcile as reconcile_transactions
+from backend.template_csv import parse_template
 
 
 @dataclass(frozen=True)
@@ -59,6 +61,8 @@ FORMATS = (
            "和已有训练对账，只补没记过的那些天"),
     Format("health_body", "运动 App 的体重 / 体脂记录", "body", "身体数据",
            "和已有测量对账，只补没记过的那些天"),
+    Format("ledger_template", "本平台的账目模板", "ledger", "个人账本",
+           "和已有交易对账，只写入还没记过的那些行"),
 )
 
 FORMAT_BY_KEY = {item.key: item for item in FORMATS}
@@ -89,6 +93,12 @@ _SIGNALS: dict[str, tuple[tuple[str, tuple[str, ...]], ...]] = {
         ("表头里有体重这一列", ("体重", "weight")),
         ("表头里有体脂这一列", ("体脂", "bodyFat")),
         ("表头里有测量时间或日期这一列", ("测量时间", "日期", "date")),
+    ),
+    "ledger_template": (
+        ("表头里有 date 或「日期」这一列", ("date", "日期")),
+        ("表头里有 amount 或「金额」这一列", ("amount", "金额")),
+        ("表头里有 type 或「类型」这一列", ("type", "类型")),
+        ("表头里有 category 或「分类」这一列", ("category", "分类")),
     ),
 }
 
@@ -246,11 +256,52 @@ def _health_envelope(conn, kind: str, filename: str, text: str) -> dict:
     }
 
 
+def _template_envelope(conn, kind: str, filename: str, text: str) -> dict:
+    """本平台模板走和账单同一套对账与分类，只是解析器不同。"""
+    from backend.modules.categorize import suggest_category
+
+    accounts = {row["name"].strip().lower(): row["id"]
+                for row in conn.execute(
+                    "SELECT id, name FROM accounts WHERE is_active = 1")}
+    default_account = conn.execute(
+        "SELECT id FROM accounts WHERE is_active = 1 ORDER BY id LIMIT 1").fetchone()
+    parsed = parse_template(text, default_account["id"] if default_account else None, accounts)
+
+    # 模板里没填分类的支出，按商户规则猜一个——和账单那条路一致。
+    # 同样不回写规则：批量导入不是用户对每一行的确认。
+    for row in parsed["rows"]:
+        if row["type"] != "expense" or row.get("category") not in (None, "other"):
+            continue
+        hit = suggest_category(conn, row.get("note", ""))
+        if hit:
+            row["category"] = hit["category"]
+            row["category_by"] = hit["keyword"]
+
+    result = reconcile_transactions(conn, parsed["rows"])
+    return {
+        "rows": result["new"],
+        "matched": result["matched"],
+        "skipped": parsed["skipped"],
+        "review": parsed["review"],
+        "summary": {
+            "parsed": len(parsed["rows"]),
+            "will_write": len(result["new"]),
+            "already_have": len(result["matched"]),
+            "skipped": len(parsed["skipped"]),
+            "amount": result["summary"].get("new_amount"),
+            "date_from": result["summary"].get("date_from"),
+            "date_to": result["summary"].get("date_to"),
+        },
+        "detail": parsed,
+    }
+
+
 _BUILDERS = {
     "wechat_statement": _statement_envelope,
     "alipay_statement": _statement_envelope,
     "health_workout": _health_envelope,
     "health_body": _health_envelope,
+    "ledger_template": _template_envelope,
 }
 
 
